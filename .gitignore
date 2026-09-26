@@ -1,0 +1,18 @@
+# Env
+backend/.env
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Docker
+pg_data/
+
+# IDE
+.vscode/
+.idea/
