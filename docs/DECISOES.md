@@ -41,6 +41,18 @@ JWT contém session id e login cria sessão revogável.
 ## 2026-09-26 — Sync assíncrono
 Sincronização bancária retorna 202 e é processada por worker.
 
+## 2026-09-26 — Idempotency-Key com máquina de estados
+Decisão: idempotency_keys tem estados processando / concluido / falhou. Retry durante processando retorna 409 com Retry-After: 1.
+
+Motivo: v1.3 gravava response antes do Asaas responder; retry recebia resposta sem QR code.
+
+Consequência: resposta só é persistida após operação concluir; retry durante processamento não devolve resposta parcial.
+
+## 2026-09-26 — subscription.status='ativa' = habilitada para renovação
+Decisão: ativa NÃO implica periodo_fim no futuro. Worker de renovação processa subscriptions com status=ativa e periodo_fim vencido.
+
+Motivo: sem essa semântica explícita, M1/M6 poderia tratar ativa como período vigente e nunca renovar as vencidas.
+
 ## 2026-09-26 — Fonte fiscal
 Fonte não verificada é exibida como pendente e não sustenta garantia ou penalidade.
 

@@ -27,8 +27,11 @@ Timeout, duplicidade, entrega fora de ordem e falhas parciais são estados norma
 ## 9. Auditoria
 Mudanças relevantes deixam trilha auditável com ator, ação e contexto.
 
-## 10. Contrato congelado
+## 10. Todo erro vira caso de teste
+Todo bug encontrado — em qualquer camada — vira caso no golden dataset ou teste unitário. O mesmo erro nunca precisa acontecer duas vezes para ser conhecido.
+
+## 11. Contrato congelado
 Após M0 PASS, mudanças de contrato exigem registro em DECISOES.md com data e motivo.
 
-## 11. Critério de parada
+## 12. Critério de parada
 Milestone só reabre por (a) contradição interna, (b) impossibilidade técnica, (c) afirmação externa não verificada ou (d) risco de perda de dado/dinheiro.
