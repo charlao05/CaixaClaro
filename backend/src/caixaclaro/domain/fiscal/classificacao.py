@@ -129,7 +129,7 @@ def _montar(cat, *, via, confianca, needs_review, motivo=None, proposito=None):
 
 
 def _heuristica(norm, ctx):
-    if _contem(norm, "das simples", "pgmei", "darf", "carne leao", "gps inss",
+    if _contem(norm, "das simples", "das mei", "pgmei", "darf", "carne leao", "gps inss",
                "arrecadacao receita federal"):
         return _montar("imposto_das", via="heuristica", confianca=0.98,
                        needs_review=False,
@@ -174,16 +174,16 @@ def _heuristica(norm, ctx):
 
     if _contem(norm, "posto ", "combustivel", "gasolina", "ipiranga", "shell",
                "oficina", "claro", "vivo", "tim ", "internet",
-               "mercado livre", "kalunga", "papelaria"):
+               "mercado livre", "kalunga", "papelaria", "aluguel comercial"):
         prop = "gasto_pessoal" if ctx.tipo_conta == "pessoal" else "gasto_negocio"
         return _montar("custo_operacional", via="heuristica", confianca=0.90,
                        needs_review=False, proposito=prop)
 
-    if _contem(norm, "venda balcao", "shopee pedido", "kit festa"):
+    if _contem(norm, "venda balcao", "shopee", "kit festa"):
         return _montar("receita_venda", via="heuristica", confianca=0.90,
                        needs_review=False)
 
-    if _contem(norm, "agencia dig ltda", "studio arte dig ltda",
+    if _contem(norm, "agencia dig ltda", "studio arte dig ltda", "consultoria",
                "servico prestado"):
         return _montar("receita_servico", via="heuristica", confianca=0.90,
                        needs_review=False)

@@ -1,0 +1,233 @@
+[
+  {
+    "id": "g001",
+    "descricao": "PAGTO GUIA DAS SIMPLES",
+    "valor": "100.00",
+    "categoria_esperada": "imposto_das",
+    "nota": "DAS/MEI"
+  },
+  {
+    "id": "g002",
+    "descricao": "DARF CARNE LEAO",
+    "valor": "200.00",
+    "categoria_esperada": "imposto_das",
+    "nota": "tributo"
+  },
+  {
+    "id": "g003",
+    "descricao": "PGMEI PARCELA 1",
+    "valor": "75.00",
+    "categoria_esperada": "imposto_das",
+    "nota": "tributo"
+  },
+  {
+    "id": "g004",
+    "descricao": "CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA",
+    "valor": "500.00",
+    "categoria_esperada": "receita_servico",
+    "nota": "servico PJ"
+  },
+  {
+    "id": "g005",
+    "descricao": "PIX RECEBIDO SERVICO PRESTADO LTDA",
+    "valor": "1200.00",
+    "categoria_esperada": "receita_servico",
+    "nota": "servico PJ"
+  },
+  {
+    "id": "g006",
+    "descricao": "SERVICO PRESTADO A EMPRESA XYZ LTDA",
+    "valor": "3000.00",
+    "categoria_esperada": "receita_servico",
+    "nota": "servico PJ"
+  },
+  {
+    "id": "g007",
+    "descricao": "VENDA BALCAO CARTAO",
+    "valor": "150.00",
+    "categoria_esperada": "receita_venda",
+    "nota": "venda balcao"
+  },
+  {
+    "id": "g008",
+    "descricao": "VENDA SHOPEE REPASSE",
+    "valor": "230.00",
+    "categoria_esperada": "receita_venda",
+    "nota": "marketplace"
+  },
+  {
+    "id": "g009",
+    "descricao": "CREDITO TED FOLHA SALARIO",
+    "valor": "4850.00",
+    "categoria_esperada": "salario",
+    "nota": "folha"
+  },
+  {
+    "id": "g010",
+    "descricao": "SALARIO MENSAL EMPRESA ABC",
+    "valor": "3200.00",
+    "categoria_esperada": "salario",
+    "nota": "salario textual"
+  },
+  {
+    "id": "g011",
+    "descricao": "BENEFICIO INSS",
+    "valor": "1400.00",
+    "categoria_esperada": "salario",
+    "nota": "beneficio"
+  },
+  {
+    "id": "g012",
+    "descricao": "TARIFA BANCARIA MENSAL",
+    "valor": "19.90",
+    "categoria_esperada": "taxas_tarifas",
+    "nota": "tarifa"
+  },
+  {
+    "id": "g013",
+    "descricao": "IOF RESGATE POUPANCA",
+    "valor": "3.50",
+    "categoria_esperada": "taxas_tarifas",
+    "nota": "IOF vence 2.5"
+  },
+  {
+    "id": "g014",
+    "descricao": "POSTO IPIRANGA COMBUSTIVEL",
+    "valor": "180.00",
+    "categoria_esperada": "custo_operacional",
+    "nota": "combustivel"
+  },
+  {
+    "id": "g015",
+    "descricao": "INTERNET VIVO FIBRA",
+    "valor": "99.00",
+    "categoria_esperada": "custo_operacional",
+    "nota": "internet"
+  },
+  {
+    "id": "g016",
+    "descricao": "TRANSF PRO LABORE TITULAR",
+    "valor": "2500.00",
+    "categoria_esperada": "pessoal_prolabore",
+    "nota": "retirada"
+  },
+  {
+    "id": "g017",
+    "descricao": "RETIRADA TITULAR",
+    "valor": "1000.00",
+    "categoria_esperada": "pessoal_prolabore",
+    "nota": "retirada"
+  },
+  {
+    "id": "g018",
+    "descricao": "ESTORNO COMPRA CANCELADA",
+    "valor": "389.90",
+    "categoria_esperada": "reembolso",
+    "nota": "estorno"
+  },
+  {
+    "id": "g019",
+    "descricao": "DEVOLUCAO PIX RECEBIDA",
+    "valor": "50.00",
+    "categoria_esperada": "reembolso",
+    "nota": "devolucao"
+  },
+  {
+    "id": "g020",
+    "descricao": "CREDITO EMPRESTIMO CONSIGNADO BCO",
+    "valor": "12000.00",
+    "categoria_esperada": "emprestimo",
+    "nota": "emprestimo"
+  },
+  {
+    "id": "g021",
+    "descricao": "FINANCIAMENTO VEICULO PARCELA",
+    "valor": "800.00",
+    "categoria_esperada": "emprestimo",
+    "nota": "financiamento"
+  },
+  {
+    "id": "g022",
+    "descricao": "MINHA POUPANCA TRANSF",
+    "valor": "500.00",
+    "categoria_esperada": "transferencia_propria",
+    "nota": "entre contas"
+  },
+  {
+    "id": "g023",
+    "descricao": "PIX RECEBIDO JOAO",
+    "valor": "100.00",
+    "categoria_esperada": "outros",
+    "nota": "generico"
+  },
+  {
+    "id": "g024",
+    "descricao": "DEPOSITO EM CONTA",
+    "valor": "200.00",
+    "categoria_esperada": "outros",
+    "nota": "generico"
+  },
+  {
+    "id": "g025",
+    "descricao": "TRANSFERENCIA RECEBIDA",
+    "valor": "300.00",
+    "categoria_esperada": "outros",
+    "nota": "generico"
+  },
+  {
+    "id": "g026",
+    "descricao": "CREDITO EM CONTA",
+    "valor": "150.00",
+    "categoria_esperada": "outros",
+    "nota": "generico"
+  },
+  {
+    "id": "g027",
+    "descricao": "PIX RECEBIDO MARCOS SOUZA",
+    "valor": "650.00",
+    "categoria_esperada": "outros",
+    "nota": "generico"
+  },
+  {
+    "id": "g028",
+    "descricao": "PAGTO DAS MEI",
+    "valor": "75.00",
+    "categoria_esperada": "imposto_das",
+    "nota": "tributo"
+  },
+  {
+    "id": "g029",
+    "descricao": "TED SALARIO EMPRESA XYZ",
+    "valor": "4100.00",
+    "categoria_esperada": "salario",
+    "nota": "salario textual"
+  },
+  {
+    "id": "g030",
+    "descricao": "TARIFA TED RECEBIDA",
+    "valor": "5.00",
+    "categoria_esperada": "taxas_tarifas",
+    "nota": "tarifa"
+  },
+  {
+    "id": "g031",
+    "descricao": "TED RECEBIDA CONSULTORIA LTDA",
+    "valor": "2800.00",
+    "categoria_esperada": "receita_servico",
+    "nota": "servico PJ"
+  },
+  {
+    "id": "g032",
+    "descricao": "DEBITO ALUGUEL COMERCIAL",
+    "valor": "1500.00",
+    "categoria_esperada": "custo_operacional",
+    "nota": "aluguel negocio"
+  },
+  {
+    "id": "g033",
+    "descricao": "IOF COMPRA INTERNACIONAL",
+    "valor": "12.40",
+    "categoria_esperada": "taxas_tarifas",
+    "nota": "IOF"
+  }
+]
