@@ -15,12 +15,19 @@ from ..services.contas import processar_item_created
 from ..services.billing import processar_webhook_asaas
 from ..services import telegram_bot
 from ..services.telegram import vincular_por_token
+from ..config import settings
+from ..security.webhooks import verificar_header_token
 
 router = APIRouter()
 
 
 @router.post("/pluggy")
 async def webhook_pluggy(request: Request):
+    verificar_header_token(
+        request,
+        "X-CaixaClaro-Webhook-Secret",
+        settings().pluggy_webhook_secret,
+    )
     payload = await request.json()
     event = payload.get("event")
     event_id = payload.get("eventId") or payload.get("id")
@@ -54,6 +61,11 @@ async def webhook_pluggy(request: Request):
 
 @router.post("/asaas")
 async def webhook_asaas(request: Request):
+    verificar_header_token(
+        request,
+        "asaas-access-token",
+        settings().asaas_webhook_token,
+    )
     payload = await request.json()
     event = payload.get("event")
     event_id = payload.get("eventId") or payload.get("id")
@@ -91,6 +103,11 @@ async def webhook_telegram(request: Request):
     Vinculacao ocorre quando chega mensagem /start <token>. Outros
     updates sao registrados mas ignorados.
     """
+    verificar_header_token(
+        request,
+        "X-Telegram-Bot-Api-Secret-Token",
+        settings().telegram_webhook_secret,
+    )
     payload = await request.json()
     update_id = payload.get("update_id")
     if update_id is None:

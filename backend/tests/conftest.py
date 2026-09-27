@@ -22,6 +22,10 @@ os.environ.setdefault(
     "postgresql://caixaclaro:dev_only_change_me@localhost:5432/caixaclaro",
 )
 
+os.environ.setdefault("PLUGGY_WEBHOOK_SECRET", "test-pluggy-secret")
+os.environ.setdefault("ASAAS_WEBHOOK_TOKEN", "test-asaas-token")
+os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-telegram-secret")
+
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _aplicar_migracoes():
@@ -59,6 +63,28 @@ async def _aplicar_migracoes():
         await conn.close()
 
 
+class _ClientComAuthWebhook:
+    _AUTH = {
+        "/webhooks/pluggy":   ("X-CaixaClaro-Webhook-Secret",     "test-pluggy-secret"),
+        "/webhooks/asaas":    ("asaas-access-token",              "test-asaas-token"),
+        "/webhooks/telegram": ("X-Telegram-Bot-Api-Secret-Token", "test-telegram-secret"),
+    }
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    async def post(self, url, *args, headers=None, **kwargs):
+        headers = dict(headers or {})
+        for path, (nome, valor) in self._AUTH.items():
+            if path in url:
+                headers.setdefault(nome, valor)
+                break
+        return await self._inner.post(url, *args, headers=headers, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 @pytest.fixture
 async def client():
     from caixaclaro.main import criar_app
@@ -70,7 +96,12 @@ async def client():
             transport=ASGITransport(app=app),
             base_url="http://test",
         ) as c:
-            yield c
+            yield _ClientComAuthWebhook(c)
+
+
+@pytest.fixture
+async def client_sem_auth(client):
+    return client._inner
 
 
 @pytest.fixture(autouse=True)

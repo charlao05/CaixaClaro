@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     telegram_bot_token:str|None=None
     asaas_base_url:str='https://api.asaas.com/v3'
     eval_ultima_execucao_path:str="var/eval/ultima_execucao.json"
+    pluggy_webhook_secret:str|None=None
+    asaas_webhook_token:str|None=None
+    telegram_webhook_secret:str|None=None
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_minimo(cls,v):
