@@ -1,6 +1,6 @@
 """Fila de revisao — M5A.
 
-Leitura de transacoes com needs_review=true, ordenadas por data DESC.
+Leitura de transacoes com needs_review=true, ordenadas por criado_em DESC.
 """
 import uuid
 
@@ -63,7 +63,7 @@ async def test_fila_traz_somente_needs_review(client):
     assert itens[0]["needs_review"] is True
 
 
-async def test_fila_ordena_data_desc(client):
+async def test_fila_ordena_criado_em_desc(client):
     token = await _registrar(client)
     texto = (
         "20/09 PIX RECEBIDO ANA R$ 10,00\n"
@@ -77,8 +77,13 @@ async def test_fila_ordena_data_desc(client):
         "/api/v1/transacoes/fila",
         headers={"Authorization": f"Bearer {token}"},
     )
-    datas = [i["data"] for i in r.json()["itens"]]
-    assert datas == sorted(datas, reverse=True)
+    itens = r.json()["itens"]
+    # Contrato §CONTRATOS_INTERNOS linha 286: /fila ordena por
+    # criado_em DESC, id DESC. Como as 3 linhas entram no mesmo
+    # loop de INSERT, criado_em segue a ordem de insercao e nao
+    # a ordem de `data`.
+    criados = [i["criado_em"] for i in itens]
+    assert criados == sorted(criados, reverse=True)
 
 
 async def test_fila_isolamento_por_usuario(client):
