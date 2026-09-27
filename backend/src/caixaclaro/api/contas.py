@@ -41,3 +41,10 @@ async def listar_contas(u: dict = Depends(usuario)):
         ]
     }
 
+@router.post("/{id}/revogar")
+async def revogar_conta(id: str, u: dict = Depends(usuario)):
+    from ..services.contas import revogar_item
+    async with conexao() as conn:
+        return await revogar_item(conn, u["id"], id)
+
+
