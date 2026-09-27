@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     jwt_expira_minutos:int=60
     cpf_hmac_key:str
     cpf_aes_key:str
+    pluggy_client_id:str|None=None
+    pluggy_client_secret:str|None=None
+    pluggy_base_url:str='https://api.pluggy.ai'
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_minimo(cls,v):
