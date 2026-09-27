@@ -105,3 +105,15 @@ async def test_aplica_migrations_reais(schema_isolado):
         "SELECT to_regclass('users') IS NOT NULL"
     )
     assert existe_users is True
+
+
+async def test_env_var_migrations_dir(monkeypatch, tmp_path):
+    """MIGRATIONS_DIR tem precedencia sobre o caminho relativo ao arquivo."""
+    (tmp_path / "001_x.sql").write_text(
+        "CREATE TABLE t_x_env (id INT);", encoding="utf-8"
+    )
+
+    monkeypatch.setenv("MIGRATIONS_DIR", str(tmp_path))
+    caminho = migration_runner._migrations_dir_padrao()
+
+    assert caminho == tmp_path

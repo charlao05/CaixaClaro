@@ -10,6 +10,7 @@ Diferenças em relação a backend/tests/conftest.py:
 """
 import asyncio
 import hashlib
+import os
 import sys
 from pathlib import Path
 
@@ -39,6 +40,18 @@ def _sha256(caminho: Path) -> str:
 
 
 def _migrations_dir_padrao() -> Path:
+    """Diretorio das migrations.
+
+    Ordem de resolucao:
+    1. Variavel de ambiente MIGRATIONS_DIR (usada em producao, onde o
+       pacote esta instalado em site-packages e o caminho relativo ao
+       arquivo nao aponta para o repo).
+    2. Caminho relativo ao arquivo — funciona em editable install,
+       que e' como dev e CI operam.
+    """
+    env = os.environ.get("MIGRATIONS_DIR")
+    if env:
+        return Path(env)
     # <repo>/backend/migrations — sobe de src/caixaclaro/ ate backend/
     return Path(__file__).resolve().parents[2] / "migrations"
 
