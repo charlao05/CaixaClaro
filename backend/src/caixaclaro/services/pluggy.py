@@ -57,3 +57,39 @@ async def criar_connect_token(user_id) -> dict:
             "connect_token": data["accessToken"],
             "expira_em": data.get("expiresAt"),
         }
+async def buscar_item(item_id: str) -> dict:
+    """GET /items/{item_id}. Retorna o JSON do Item."""
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.get(
+            f"/items/{item_id}",
+            headers={"X-API-KEY": api_key},
+        )
+        if r.status_code != 200:
+            raise erro(
+                502,
+                "PLUGGY_ITEM_FALHOU",
+                "Falha ao buscar Item na Pluggy.",
+            )
+        return r.json()
+
+
+async def listar_accounts(item_id: str) -> list:
+    """GET /accounts?itemId={item_id}. Retorna a lista de contas."""
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.get(
+            "/accounts",
+            params={"itemId": item_id},
+            headers={"X-API-KEY": api_key},
+        )
+        if r.status_code != 200:
+            raise erro(
+                502,
+                "PLUGGY_ACCOUNTS_FALHOU",
+                "Falha ao listar contas na Pluggy.",
+            )
+        return r.json()["results"]
+
