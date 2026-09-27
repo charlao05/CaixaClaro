@@ -4,230 +4,284 @@
     "descricao": "PAGTO GUIA DAS SIMPLES",
     "valor": "100.00",
     "categoria_esperada": "imposto_das",
-    "nota": "DAS/MEI"
+    "nota": "DAS/MEI",
+    "difficulty": "easy",
+    "regra": "tributo"
   },
   {
     "id": "g002",
     "descricao": "DARF CARNE LEAO",
     "valor": "200.00",
     "categoria_esperada": "imposto_das",
-    "nota": "tributo"
+    "nota": "tributo",
+    "difficulty": "easy",
+    "regra": "tributo"
   },
   {
     "id": "g003",
     "descricao": "PGMEI PARCELA 1",
     "valor": "75.00",
     "categoria_esperada": "imposto_das",
-    "nota": "tributo"
+    "nota": "tributo",
+    "difficulty": "easy",
+    "regra": "tributo"
   },
   {
     "id": "g004",
     "descricao": "CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA",
     "valor": "500.00",
     "categoria_esperada": "receita_servico",
-    "nota": "servico PJ"
+    "nota": "servico PJ",
+    "difficulty": "easy"
   },
   {
     "id": "g005",
     "descricao": "PIX RECEBIDO SERVICO PRESTADO LTDA",
     "valor": "1200.00",
     "categoria_esperada": "receita_servico",
-    "nota": "servico PJ"
+    "nota": "servico PJ",
+    "difficulty": "easy"
   },
   {
     "id": "g006",
     "descricao": "SERVICO PRESTADO A EMPRESA XYZ LTDA",
     "valor": "3000.00",
     "categoria_esperada": "receita_servico",
-    "nota": "servico PJ"
+    "nota": "servico PJ",
+    "difficulty": "easy"
   },
   {
     "id": "g007",
     "descricao": "VENDA BALCAO CARTAO",
     "valor": "150.00",
     "categoria_esperada": "receita_venda",
-    "nota": "venda balcao"
+    "nota": "venda balcao",
+    "difficulty": "easy"
   },
   {
     "id": "g008",
     "descricao": "VENDA SHOPEE REPASSE",
     "valor": "230.00",
     "categoria_esperada": "receita_venda",
-    "nota": "marketplace"
+    "nota": "marketplace",
+    "difficulty": "easy"
   },
   {
     "id": "g009",
     "descricao": "CREDITO TED FOLHA SALARIO",
     "valor": "4850.00",
     "categoria_esperada": "salario",
-    "nota": "folha"
+    "nota": "folha",
+    "difficulty": "easy"
   },
   {
     "id": "g010",
     "descricao": "SALARIO MENSAL EMPRESA ABC",
     "valor": "3200.00",
     "categoria_esperada": "salario",
-    "nota": "salario textual"
+    "nota": "salario textual",
+    "difficulty": "easy"
   },
   {
     "id": "g011",
     "descricao": "BENEFICIO INSS",
     "valor": "1400.00",
     "categoria_esperada": "salario",
-    "nota": "beneficio"
+    "nota": "beneficio",
+    "difficulty": "easy"
   },
   {
     "id": "g012",
     "descricao": "TARIFA BANCARIA MENSAL",
     "valor": "19.90",
     "categoria_esperada": "taxas_tarifas",
-    "nota": "tarifa"
+    "nota": "tarifa",
+    "difficulty": "easy"
   },
   {
     "id": "g013",
     "descricao": "IOF RESGATE POUPANCA",
     "valor": "3.50",
     "categoria_esperada": "taxas_tarifas",
-    "nota": "IOF vence 2.5"
+    "nota": "IOF vence 2.5",
+    "difficulty": "medium"
   },
   {
     "id": "g014",
     "descricao": "POSTO IPIRANGA COMBUSTIVEL",
     "valor": "180.00",
     "categoria_esperada": "custo_operacional",
-    "nota": "combustivel"
+    "nota": "combustivel",
+    "difficulty": "easy"
   },
   {
     "id": "g015",
     "descricao": "INTERNET VIVO FIBRA",
     "valor": "99.00",
     "categoria_esperada": "custo_operacional",
-    "nota": "internet"
+    "nota": "internet",
+    "difficulty": "easy"
   },
   {
     "id": "g016",
     "descricao": "TRANSF PRO LABORE TITULAR",
     "valor": "2500.00",
     "categoria_esperada": "pessoal_prolabore",
-    "nota": "retirada"
+    "nota": "retirada",
+    "difficulty": "hard",
+    "regra": "ponte_pf_pj"
   },
   {
     "id": "g017",
     "descricao": "RETIRADA TITULAR",
     "valor": "1000.00",
     "categoria_esperada": "pessoal_prolabore",
-    "nota": "retirada"
+    "nota": "retirada",
+    "difficulty": "hard",
+    "regra": "ponte_pf_pj"
   },
   {
     "id": "g018",
     "descricao": "ESTORNO COMPRA CANCELADA",
     "valor": "389.90",
     "categoria_esperada": "reembolso",
-    "nota": "estorno"
+    "nota": "estorno",
+    "difficulty": "easy",
+    "regra": "estorno"
   },
   {
     "id": "g019",
     "descricao": "DEVOLUCAO PIX RECEBIDA",
     "valor": "50.00",
     "categoria_esperada": "reembolso",
-    "nota": "devolucao"
+    "nota": "devolucao",
+    "difficulty": "easy",
+    "regra": "estorno"
   },
   {
     "id": "g020",
     "descricao": "CREDITO EMPRESTIMO CONSIGNADO BCO",
     "valor": "12000.00",
     "categoria_esperada": "emprestimo",
-    "nota": "emprestimo"
+    "nota": "emprestimo",
+    "difficulty": "easy",
+    "regra": "emprestimo"
   },
   {
     "id": "g021",
     "descricao": "FINANCIAMENTO VEICULO PARCELA",
     "valor": "800.00",
     "categoria_esperada": "emprestimo",
-    "nota": "financiamento"
+    "nota": "financiamento",
+    "difficulty": "easy",
+    "regra": "emprestimo"
   },
   {
     "id": "g022",
     "descricao": "MINHA POUPANCA TRANSF",
     "valor": "500.00",
     "categoria_esperada": "transferencia_propria",
-    "nota": "entre contas"
+    "nota": "entre contas",
+    "difficulty": "medium"
   },
   {
     "id": "g023",
     "descricao": "PIX RECEBIDO JOAO",
     "valor": "100.00",
     "categoria_esperada": "outros",
-    "nota": "generico"
+    "nota": "generico",
+    "difficulty": "adversarial"
   },
   {
     "id": "g024",
     "descricao": "DEPOSITO EM CONTA",
     "valor": "200.00",
     "categoria_esperada": "outros",
-    "nota": "generico"
+    "nota": "generico",
+    "difficulty": "adversarial"
   },
   {
     "id": "g025",
     "descricao": "TRANSFERENCIA RECEBIDA",
     "valor": "300.00",
     "categoria_esperada": "outros",
-    "nota": "generico"
+    "nota": "generico",
+    "difficulty": "adversarial"
   },
   {
     "id": "g026",
     "descricao": "CREDITO EM CONTA",
     "valor": "150.00",
     "categoria_esperada": "outros",
-    "nota": "generico"
+    "nota": "generico",
+    "difficulty": "adversarial"
   },
   {
     "id": "g027",
     "descricao": "PIX RECEBIDO MARCOS SOUZA",
     "valor": "650.00",
     "categoria_esperada": "outros",
-    "nota": "generico"
+    "nota": "generico",
+    "difficulty": "adversarial"
   },
   {
     "id": "g028",
     "descricao": "PAGTO DAS MEI",
     "valor": "75.00",
     "categoria_esperada": "imposto_das",
-    "nota": "tributo"
+    "nota": "tributo",
+    "difficulty": "easy",
+    "regra": "tributo"
   },
   {
     "id": "g029",
     "descricao": "TED SALARIO EMPRESA XYZ",
     "valor": "4100.00",
     "categoria_esperada": "salario",
-    "nota": "salario textual"
+    "nota": "salario textual",
+    "difficulty": "easy"
   },
   {
     "id": "g030",
     "descricao": "TARIFA TED RECEBIDA",
     "valor": "5.00",
     "categoria_esperada": "taxas_tarifas",
-    "nota": "tarifa"
+    "nota": "tarifa",
+    "difficulty": "medium"
   },
   {
     "id": "g031",
     "descricao": "TED RECEBIDA CONSULTORIA LTDA",
     "valor": "2800.00",
     "categoria_esperada": "receita_servico",
-    "nota": "servico PJ"
+    "nota": "servico PJ",
+    "difficulty": "medium"
   },
   {
     "id": "g032",
     "descricao": "DEBITO ALUGUEL COMERCIAL",
     "valor": "1500.00",
     "categoria_esperada": "custo_operacional",
-    "nota": "aluguel negocio"
+    "nota": "aluguel negocio",
+    "difficulty": "medium"
   },
   {
     "id": "g033",
     "descricao": "IOF COMPRA INTERNACIONAL",
     "valor": "12.40",
     "categoria_esperada": "taxas_tarifas",
-    "nota": "IOF"
+    "nota": "IOF",
+    "difficulty": "medium"
+  },
+  {
+    "id": "g034",
+    "descricao": "PIX RECEBIDO M SILVA",
+    "valor": "500.00",
+    "categoria_esperada": "transferencia_propria",
+    "difficulty": "hard",
+    "regra": "cpf_proprio",
+    "cpf_titular_hash": "abc123",
+    "cpf_contraparte_hash": "abc123",
+    "nota": "CPF contraparte == titular"
   }
 ]
