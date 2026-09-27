@@ -135,6 +135,7 @@ Critérios:
   - [ ] Deploy em ambiente real
         DECIDIDO: VPS container-first. Ver docs/M10_DECISAO.md.
   - [ ] Backup e observabilidade ativos
-  - [ ] Rollback ensaiado
+  - [x] Rollback ensaiado
+        ENSAIO MECÂNICO LOCAL: retag da imagem anterior + recreate de api/worker.
   - [ ] Primeiro usuário real end-to-end
         ABERTO: via API ou via UI? Depende de M8.
