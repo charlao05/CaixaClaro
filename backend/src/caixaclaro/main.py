@@ -63,6 +63,22 @@ def criar_app() -> FastAPI:
     async def health():
         return {"ok": True, "ambiente": settings().ambiente}
 
+    @app.get("/healthz")
+    async def healthz():
+        """Liveness: processo vivo, sem checar dependencias."""
+        return {"ok": True}
+
+    @app.get("/readyz")
+    async def readyz():
+        """Readiness: pool do PostgreSQL utilizavel."""
+        from .db import conexao
+        try:
+            async with conexao() as conn:
+                await conn.fetchval("SELECT 1")
+        except Exception:
+            return JSONResponse(status_code=503, content={"ok": False})
+        return {"ok": True}
+
     return app
 
 
