@@ -169,3 +169,12 @@ Pendentes por ausencia de credencial Telegram (bot token):
 Reabrir M7 apenas se: (a) credencial Telegram obtida e algum
 comportamento divergir; (b) algum dos 2 criterios pendentes exigir
 mudanca de contrato.
+
+## 2026-09-27 — Telegram: credencial real validada via getMe
+
+`GET https://api.telegram.org/bot<TOKEN>/getMe` retornou
+{"status": 200, "ok": true, "username": "CaixaClaroBot"}.
+Confirma que TELEGRAM_BOT_TOKEN está correta e que o backend
+consegue autenticar na Bot API. Nao prova ainda o ciclo
+/start -> vinculacao -> resposta (isso exige entrega real,
+registrado em §M7 da DECISOES).
