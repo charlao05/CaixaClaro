@@ -16,3 +16,6 @@ pg_data/
 # IDE
 .vscode/
 .idea/
+
+# Runtime snapshots
+backend/var/
