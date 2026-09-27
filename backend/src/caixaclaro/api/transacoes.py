@@ -18,12 +18,18 @@ from ..domain.ingest.textnorm import calcular_paste_id
 from ..security.audit import registrar_auditoria
 from ..security.erros import erro
 from ..security.idempotency import executar_com_idempotencia
-from ..domain.fiscal.classificacao import ContextoClassificacao
+from ..domain.fiscal.classificacao import (
+    ContextoClassificacao,
+    classificar_v2,
+)
+from ..domain.fiscal.guardrails import aplicar_guardrail
+from ..domain.fiscal.triagem import triar
 from ..services.faturamento import (
     atualizar_fiscal_state,
     conta_faturamento,
 )
 from ..services.fiscal import processar_lancamento
+from ..services.tax_opinion import generate_tax_opinion
 from ..services.fila import confirmar as confirmar_tx, listar_fila
 
 router = APIRouter()
@@ -451,4 +457,72 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova):
         "delta_faturamento": str(resultado.delta_faturamento),
         "categoria_mudou": resultado.categoria_mudou,
     }, 200
+
+# ============================================================
+# GET /transacoes/{tx_id}/opiniao — CONTRATOS_INTERNOS §6
+# ============================================================
+
+def _serializar_opcao(o) -> dict:
+    return {
+        "label": o.label,
+        "proposito": o.proposito,
+        "descricao": o.descricao,
+    }
+
+
+@router.get("/{tx_id}/opiniao")
+async def opiniao_endpoint(
+    tx_id: str,
+    u: dict = Depends(usuario),
+):
+    async with conexao() as conn:
+        return await _operacao_opiniao(conn, str(u["id"]), tx_id)
+
+
+async def _operacao_opiniao(conn, user_id, tx_id):
+    try:
+        tx_uuid = _uuid.UUID(tx_id)
+    except ValueError:
+        raise erro(400, "ID_INVALIDO", "ID da transacao invalido")
+
+    row = await conn.fetchrow(
+        """
+        SELECT descricao_bruta, valor, confirmado_por
+          FROM transactions
+         WHERE id = $1 AND user_id = $2
+        """,
+        tx_uuid,
+        _uuid.UUID(user_id),
+    )
+    if row is None:
+        raise erro(404, "TX_NAO_ENCONTRADA", "Transacao nao encontrada")
+
+    ctx = ContextoClassificacao(personal_rules={})
+    classif = classificar_v2(row["descricao_bruta"], row["valor"], ctx)
+    guard = aplicar_guardrail(classif, descricao=row["descricao_bruta"])
+    tri = triar(classif, guard)
+
+    opiniao = generate_tax_opinion(
+        descricao=row["descricao_bruta"],
+        valor=row["valor"],
+        classif=classif,
+        guard=guard,
+        tri=tri,
+    )
+
+    return {
+        "tx_id": tx_id,
+        "fato": opiniao.fato,
+        "interpretacao": opiniao.interpretacao,
+        "relacao_pf_pj": opiniao.relacao_pf_pj,
+        "possivel_tratamento_tributario": opiniao.possivel_tratamento_tributario,
+        "condicoes_necessarias": opiniao.condicoes_necessarias,
+        "pendencias": opiniao.pendencias,
+        "proximo_passo": opiniao.proximo_passo,
+        "grau_certeza_leitura": opiniao.grau_certeza_leitura,
+        "opcoes_esclarecimento": [
+            _serializar_opcao(o) for o in opiniao.opcoes_esclarecimento
+        ],
+        "confirmada": row["confirmado_por"] is not None,
+    }
 
