@@ -242,3 +242,82 @@ async def test_checkout_plano_invalido_400(client, monkeypatch):
 
     assert exc.value.status_code == 400
     assert exc.value.detail["erro"] == "PLANO_INVALIDO"
+
+
+# ----------------------------------------------------------------
+# M5.8a — concorrencia e crash
+# ----------------------------------------------------------------
+
+async def test_checkout_crash_pos_post_adota_no_retry(client, monkeypatch):
+    """Simula: POST Asaas OK, UPDATE local falhou antes de gravar asaas_id.
+
+    Estado deixado: payment pendente com external_reference mas sem
+    asaas_payment_id. Proximo checkout faz GET e adota, sem 2o PIX.
+    """
+    uid = await _criar_usuario(client, "crash@x.com", "311.311.311-31")
+    chamadas = _mock_asaas(
+        monkeypatch,
+        pagamento_existente={"id": "pay_ext_crash", "externalReference": "ref"},
+    )
+
+    async with conexao() as conn:
+        await conn.execute(
+            "UPDATE users SET asaas_customer_id = 'cus_x' WHERE id = $1", uid
+        )
+        # Estado pos-crash: pendente, external_reference definida, sem asaas_id
+        await conn.execute(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, external_reference)
+            VALUES ($1, 'pro_mensal', 49.90, 30, 'pendente', 'ref')
+            """,
+            uid,
+        )
+
+    async with conexao() as conn:
+        out = await _checkout(conn, uid)
+
+    # GET encontrou -> adotou, sem segundo POST
+    assert chamadas["criar_pagamento"] == []
+    assert chamadas["qrcode"] == ["pay_ext_crash"]
+    assert out["status"] == "pendente"
+
+    # ID persistido agora
+    async with conexao() as conn:
+        salvo = await conn.fetchval(
+            "SELECT asaas_payment_id FROM payments WHERE user_id = $1", uid
+        )
+    assert salvo == "pay_ext_crash"
+
+
+async def test_checkout_corrida_dois_workers_apenas_um_post(client, monkeypatch):
+    """Dois checkouts concorrentes: apenas um POST no Asaas.
+
+    O advisory lock por usuario serializa. Task B encontra o payment
+    da Task A com QR cacheado e retorna sem tocar o Asaas.
+    """
+    import asyncio
+
+    uid = await _criar_usuario(client, "corrida@x.com", "312.312.312-32")
+    chamadas = _mock_asaas(monkeypatch)
+
+    async def task(worker_id):
+        async with conexao() as conn:
+            return await _checkout(conn, uid, worker=worker_id)
+
+    r1, r2 = await asyncio.gather(task("w1"), task("w2"))
+
+    # Invariante: nunca dois POSTs
+    assert len(chamadas["criar_pagamento"]) == 1
+
+    # Ambos retornam sucesso com o mesmo payment_id local
+    assert r1["payment_id"] == r2["payment_id"]
+    assert r1["status"] == "pendente"
+    assert r2["status"] == "pendente"
+
+    # Claim liberado
+    async with conexao() as conn:
+        claim = await conn.fetchval(
+            "SELECT claimed_at FROM payments WHERE user_id = $1", uid
+        )
+    assert claim is None
