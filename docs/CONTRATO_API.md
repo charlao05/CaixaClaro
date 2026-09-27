@@ -151,9 +151,15 @@ Segundo mark-read do mesmo alerta é no-op e não altera lido_em. Ownership é o
 
 ## Eval
 
-GET /eval/ultima-execucao
+GET /api/v1/eval/ultima-execucao
 
-Golden/eval é executado fora do cliente.
+Golden/eval é executado fora do cliente (CI ou manualmente), nunca pelo
+runtime do backend. O runner publica o resultado em arquivo JSON cujo
+caminho é definido por `settings.eval_ultima_execucao_path`. O endpoint
+apenas lê esse arquivo; não recalcula e não executa o runner. Devolve
+404 se o arquivo ainda não existir.
+
+Formato da resposta e decisão de arquitetura: docs/M9.3_DECISAO.md §4.
 
 ## Telegram
 
