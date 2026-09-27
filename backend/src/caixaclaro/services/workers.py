@@ -10,12 +10,21 @@ a Pluggy roda FORA da transacao para nao segurar lock durante HTTP.
 Recuperacao: linhas em 'processando' mais antigas que
 PROCESSANDO_OBSOLETO_SEGUNDOS voltam para 'pendente' no inicio de cada
 tick — mesma janela usada em security/idempotency.py.
+
+Classificacao fiscal: segue o padrao de POST /transacoes/extrato/colar
+(api/transacoes.py) — classifica cada transacao com processar_lancamento,
+acumula delta_faturamento e chama atualizar_fiscal_state UMA VEZ ao fim
+do sync. Consistente com o criterio M4 "fiscal_state atualizado no mesmo
+passo da ingestao".
 """
 from datetime import date
 from decimal import Decimal
 
+from ..domain.fiscal.classificacao import ContextoClassificacao
 from ..security.audit import registrar_auditoria
+from ..services.faturamento import atualizar_fiscal_state, conta_faturamento
 from . import pluggy
+from .fiscal import processar_lancamento
 
 PROCESSANDO_OBSOLETO_SEGUNDOS = 300
 
@@ -90,13 +99,20 @@ def _normalizar_data(valor):
     return None
 
 
-async def _persistir_transacoes(conn, user_id, account_id, results) -> int:
-    """Upsert de transacoes Pluggy por (user_id, pluggy_tx_id).
+async def _persistir_transacoes(conn, user_id, account_id, results):
+    """Upsert de transacoes Pluggy + classificacao fiscal.
 
-    Nao classifica — classificacao e M4, disparada em fluxo separado.
-    Retorna o numero de linhas efetivamente inseridas (nao conflitos).
+    Retorna (inseridas, delta_faturamento, data_mais_recente).
+
+    Segue o padrao de POST /transacoes/extrato/colar: classifica cada
+    transacao com processar_lancamento e acumula delta. O caller e que
+    chama atualizar_fiscal_state uma vez no fim.
     """
     inseridas = 0
+    delta = Decimal("0")
+    data_mais_recente = None
+    ctx = ContextoClassificacao(personal_rules={})
+
     for tx in results:
         tx_id = tx.get("id")
         data = _normalizar_data(tx.get("date"))
@@ -104,13 +120,22 @@ async def _persistir_transacoes(conn, user_id, account_id, results) -> int:
         amount = tx.get("amount")
         if not tx_id or data is None or amount is None:
             continue
+
         valor = Decimal(str(amount))
+        rf = processar_lancamento(descricao, valor, contexto=ctx)
+        cat = rf.guardrail.categoria_corrigida
+        c = rf.classificacao
+
         row = await conn.fetchval(
             """
             INSERT INTO transactions
               (user_id, account_id, origem, pluggy_tx_id,
-               data, descricao_bruta, valor)
-            VALUES ($1, $2, 'pluggy', $3, $4, $5, $6)
+               data, descricao_bruta, valor,
+               categoria, categoria_original,
+               proposito, patrimonio, tratamento_tributario,
+               confianca, needs_review, via, motivo)
+            VALUES ($1, $2, 'pluggy', $3, $4, $5, $6,
+                    $7, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT (user_id, pluggy_tx_id)
                 WHERE pluggy_tx_id IS NOT NULL
             DO NOTHING
@@ -122,10 +147,23 @@ async def _persistir_transacoes(conn, user_id, account_id, results) -> int:
             data,
             descricao,
             valor,
+            cat,
+            c.proposito,
+            c.patrimonio,
+            c.tratamento_tributario,
+            c.confianca,
+            rf.triagem.needs_review,
+            c.via,
+            c.motivo,
         )
         if row is not None:
             inseridas += 1
-    return inseridas
+            if conta_faturamento(c.patrimonio, cat):
+                delta += valor
+                if data_mais_recente is None or data > data_mais_recente:
+                    data_mais_recente = data
+
+    return inseridas, delta, data_mais_recente
 
 
 async def processar_um_sync(conn, worker_id: str) -> bool:
@@ -143,20 +181,32 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
     try:
         page = 1
         total_inseridas = 0
+        delta_total = Decimal("0")
+        data_mais_recente = None
         while True:
             payload = await pluggy.listar_transactions(
                 sync["provider_account_id"], page=page
             )
-            total_inseridas += await _persistir_transacoes(
+            inseridas, delta, data = await _persistir_transacoes(
                 conn,
                 sync["user_id"],
                 sync["account_id"],
                 payload.get("results") or [],
             )
+            total_inseridas += inseridas
+            delta_total += delta
+            if data is not None:
+                if data_mais_recente is None or data > data_mais_recente:
+                    data_mais_recente = data
             total_pages = payload.get("totalPages") or 1
             if page >= total_pages:
                 break
             page += 1
+
+        if delta_total > 0 and data_mais_recente is not None:
+            await atualizar_fiscal_state(
+                conn, sync["user_id"], delta_total, data_mais_recente
+            )
 
         await conn.execute(
             """
@@ -174,7 +224,10 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
             acao="SYNC_COMPLETED",
             user_id=str(sync["user_id"]),
             alvo=str(sync["id"]),
-            meta={"inseridas": total_inseridas},
+            meta={
+                "inseridas": total_inseridas,
+                "delta_faturamento": str(delta_total),
+            },
         )
     except Exception as e:
         await conn.execute(
