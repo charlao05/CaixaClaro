@@ -6,6 +6,7 @@ Demais endpoints e webhook entram em passos seguintes.
 from fastapi import APIRouter, Depends
 
 from ..api.deps import usuario
+from ..db import conexao
 from ..services.pluggy import criar_connect_token
 
 router = APIRouter()
@@ -14,3 +15,29 @@ router = APIRouter()
 @router.post("/conectar")
 async def conectar(u: dict = Depends(usuario)):
     return await criar_connect_token(u["id"])
+
+@router.get("")
+async def listar_contas(u: dict = Depends(usuario)):
+    async with conexao() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, provider, provider_account_id, nome, criado_em
+              FROM accounts
+             WHERE user_id = $1
+             ORDER BY criado_em DESC, id DESC
+            """,
+            u["id"],
+        )
+    return {
+        "itens": [
+            {
+                "id": str(r["id"]),
+                "provider": r["provider"],
+                "provider_account_id": r["provider_account_id"],
+                "nome": r["nome"],
+                "criado_em": r["criado_em"].isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
