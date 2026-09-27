@@ -32,6 +32,7 @@ from ..services.fiscal import processar_lancamento
 from ..services.tax_opinion import generate_tax_opinion
 from ..services.fiscal_resumo import resumo as resumo_fiscal
 from ..services.fila import confirmar as confirmar_tx, listar_fila
+from ..services.alertas import listar_alertas, marcar_lido
 
 from ..domain.fiscal.classificacao import ClassificacaoResultado
 from ..domain.fiscal.guardrails import GuardrailResultado
@@ -363,13 +364,23 @@ def _serializar_fila(r) -> dict:
 async def fila(
     request: Request,
     limite: int = Query(50, ge=1, le=200),
+    cursor: str | None = Query(None),
     u: dict = Depends(usuario),
 ):
-    async with conexao() as conn:
-        rows = await listar_fila(
-            conn, _uuid.UUID(str(u["id"])), limite=limite
-        )
-    return {"itens": [_serializar_fila(r) for r in rows]}
+    try:
+        async with conexao() as conn:
+            rows, has_more, next_cursor = await listar_fila(
+                conn, _uuid.UUID(str(u["id"])),
+                limite=limite, cursor=cursor,
+            )
+    except ValueError as e:
+        raise erro(400, "CURSOR_INVALIDO", "Cursor malformado.") from e
+
+    return {
+        "itens": [_serializar_fila(r) for r in rows],
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+    }
 
 
 # ============================================================
@@ -558,6 +569,69 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         ],
         "confirmada": row["confirmado_por"] is not None,
     }
+
+# ============================================================
+# GET /alertas + POST /alertas/{id}/lido
+# ============================================================
+
+def _serializar_alerta(r) -> dict:
+    return {
+        "id": str(r["id"]),
+        "tipo": r["tipo"],
+        "severidade": r["severidade"],
+        "mensagem": r["mensagem"],
+        "lido_em": r["lido_em"].isoformat() if r["lido_em"] else None,
+        "criado_em": r["criado_em"].isoformat(),
+        "banda_ou_slug": r["banda_ou_slug"],
+        "prazo": r["prazo"].isoformat() if r["prazo"] else None,
+    }
+
+
+@router.get("/alertas")
+async def listar_alertas_endpoint(
+    request: Request,
+    apenas_nao_lidos: bool = Query(False),
+    tipo: str | None = Query(None),
+    limite: int = Query(50, ge=1, le=200),
+    cursor: str | None = Query(None),
+    u: dict = Depends(usuario),
+):
+    async with conexao() as conn:
+        rows, has_more, next_cursor = await listar_alertas(
+            conn, _uuid.UUID(str(u["id"])),
+            apenas_nao_lidos=apenas_nao_lidos,
+            tipo=tipo,
+            limite=limite,
+            cursor=cursor,
+        )
+    return {
+        "itens": [_serializar_alerta(r) for r in rows],
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+    }
+
+
+@router.post("/alertas/{alerta_id}/lido")
+async def marcar_alerta_lido_endpoint(
+    alerta_id: str,
+    u: dict = Depends(usuario),
+):
+    try:
+        aid = _uuid.UUID(alerta_id)
+    except ValueError:
+        raise erro(400, "ID_INVALIDO", "ID do alerta invalido")
+
+    async with conexao() as conn:
+        resultado = await marcar_lido(conn, _uuid.UUID(str(u["id"])), aid)
+
+    if resultado is None:
+        raise erro(404, "ALERTA_NAO_ENCONTRADO", "Alerta nao encontrado")
+
+    return {
+        "alerta_id": alerta_id,
+        "marcado_agora": resultado,
+    }
+
 
 # ============================================================
 # GET /fiscal/resumo — leitura do estado fiscal

@@ -9,7 +9,10 @@ Decisoes congeladas:
     banda_atual — §10 continua monotonico).
   - Auditoria: B (categoria_original preserva o que a maquina disse).
 """
+import base64
+import uuid as _uuid
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 from ..domain.fiscal.taxonomia import get_categoria
@@ -28,22 +31,59 @@ def _delta_faturamento(
     return Decimal(depois) - Decimal(antes)
 
 
-async def listar_fila(conn, user_id, *, limite: int = 50):
-    """Transacoes em revisao, mais recentes primeiro."""
-    return await conn.fetch(
-        """
+def _encode_cursor_fila(d, id_) -> str:
+    payload = f"{d.isoformat()}|{id_}"
+    return base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+
+
+def _decode_cursor_fila(cursor: str):
+    """Retorna (date, uuid) ou levanta ValueError."""
+    padding = "=" * (-len(cursor) % 4)
+    raw = base64.urlsafe_b64decode(cursor + padding).decode()
+    d_s, id_s = raw.split("|", 1)
+    return date.fromisoformat(d_s), _uuid.UUID(id_s)
+
+
+async def listar_fila(conn, user_id, *, limite: int = 50, cursor: str | None = None):
+    """Transacoes em revisao, mais recentes primeiro. Cursor opcional."""
+    cursor_data, cursor_id = (None, None)
+    if cursor:
+        try:
+            cursor_data, cursor_id = _decode_cursor_fila(cursor)
+        except Exception as e:
+            raise ValueError("cursor malformado") from e
+
+    sql = """
         SELECT id, data, descricao_bruta, valor, origem,
                categoria, categoria_original, proposito, patrimonio,
                tratamento_tributario, confianca, needs_review, via, motivo,
                criado_em, atualizado_em, versao
           FROM transactions
          WHERE user_id = $1 AND needs_review = true
-         ORDER BY data DESC, id DESC
-         LIMIT $2
-        """,
-        user_id,
-        limite,
-    )
+    """
+    args = [user_id]
+    if cursor_data is not None:
+        sql += (
+            " AND (data < $2::date"
+            " OR (data = $2::date AND id < $3::uuid))"
+        )
+        args.extend([cursor_data, cursor_id])
+        sql += " ORDER BY data DESC, id DESC LIMIT $4"
+        args.append(limite + 1)
+    else:
+        sql += " ORDER BY data DESC, id DESC LIMIT $2"
+        args.append(limite + 1)
+
+    rows = await conn.fetch(sql, *args)
+    has_more = len(rows) > limite
+    rows = rows[:limite]
+
+    next_cursor = None
+    if has_more and rows:
+        last = rows[-1]
+        next_cursor = _encode_cursor_fila(last["data"], last["id"])
+
+    return rows, has_more, next_cursor
 
 
 async def buscar_para_confirmar(conn, user_id, tx_id):
