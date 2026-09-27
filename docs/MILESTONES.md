@@ -64,15 +64,15 @@ Critérios:
 
 ## M5 — Billing
 Critérios:
-  - [ ] Checkout com Idempotency-Key
-  - [ ] GET antes de POST obrigatório (property testável)
-  - [ ] Claim persistente = exclusão mútua
-  - [ ] Webhook com duplo lookup (asaas_payment_id + externalReference)
-  - [ ] user_id do payment local (não do evento)
-  - [ ] PAYMENT_CONFIRMED × 5 estados de payment (matriz completa)
-  - [ ] Política B (confirmação tardia) auditada
-  - [ ] 4 testes de aceite de B11/B12
-  - [ ] corrida entre workers e crash após POST sem persistência de ID provados
+  - [x] Checkout com Idempotency-Key
+  - [x] GET antes de POST obrigatório (property testável)
+  - [x] Claim persistente = exclusão mútua
+  - [x] Webhook com duplo lookup (asaas_payment_id + externalReference)
+  - [x] user_id do payment local (não do evento)
+  - [x] PAYMENT_CONFIRMED × 5 estados de payment (matriz completa)
+  - [x] Política B (confirmação tardia) auditada
+  - [~] 4 testes de aceite de B11/B12 — PENDENTE: definicao perdida em compactacao (c3ec0fc)
+  - [x] corrida entre workers e crash após POST sem persistência de ID provados
 
 ## M6 — Workers
 Critérios:

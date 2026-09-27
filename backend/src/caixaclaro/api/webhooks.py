@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 from ..db import conexao
 from ..security.erros import erro
 from ..services.contas import processar_item_created
+from ..services.billing import processar_webhook_asaas
 
 router = APIRouter()
 
@@ -48,3 +49,34 @@ async def webhook_pluggy(request: Request):
                 return {"ok": True, "processado": resultado}
 
             return {"ok": True, "ignorado": event}
+
+@router.post("/asaas")
+async def webhook_asaas(request: Request):
+    payload = await request.json()
+    event = payload.get("event")
+    event_id = payload.get("eventId") or payload.get("id")
+
+    if not event or not event_id:
+        raise erro(
+            400,
+            "WEBHOOK_PAYLOAD_INVALIDO",
+            "event e eventId obrigatorios.",
+        )
+
+    async with conexao() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                INSERT INTO webhook_events (origem, event_id, payload)
+                VALUES ('asaas', $1, $2::jsonb)
+                ON CONFLICT (origem, event_id) DO NOTHING
+                RETURNING id
+                """,
+                str(event_id),
+                json.dumps(payload, ensure_ascii=False),
+            )
+
+            if row is None:
+                return {"ok": True, "duplicado": True}
+
+            return await processar_webhook_asaas(conn, payload)
