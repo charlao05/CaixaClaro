@@ -88,6 +88,58 @@ ClassificacaoResultado:
 
 ---
 
+## 4.1. Taxonomia v1
+
+Versão: `TAXONOMIA_VERSION = "v1"`.
+
+A taxonomia define os valores válidos para o campo `categoria` de
+`ClassificacaoResultado` (§4). É contrato do produto, não dado
+operacional editável pelo usuário.
+
+### Categorias
+
+| id                    | rótulo                              | receita | despesa | neutra |
+|-----------------------|-------------------------------------|---------|---------|--------|
+| receita_servico       | Trabalho / Prestação de Serviço     | sim     | não     | não    |
+| receita_venda         | Vendas de Produtos / Comércio       | sim     | não     | não    |
+| salario               | Salário Formal / Aposentadoria      | sim     | não     | não    |
+| imposto_das           | Impostos e Tributos (DAS/IRPF/DARF) | não     | sim     | não    |
+| taxas_tarifas         | Taxas Bancárias & Maquininha        | não     | sim     | não    |
+| custo_operacional     | Gastos da Atividade / Trabalho      | não     | sim     | não    |
+| transferencia_propria | Transferência Entre Contas Próprias | não     | não     | sim    |
+| pessoal_prolabore     | Retirada da Empresa / Pró-Labore    | não     | não     | sim    |
+| reembolso             | Devolução / Reembolso               | não     | não     | sim    |
+| emprestimo            | Empréstimo (peguei ou emprestei)    | não     | não     | sim    |
+| outros                | Aguardando Confirmação              | não     | não     | sim    |
+
+Onze categorias. Nenhuma pode ser renomeada, removida ou ter seu
+significado alterado sem uma versão v2.
+
+### Estabilidade dos identificadores
+
+`categoria` é dado persistido em `transactions.categoria`. Uma vez
+gravado, o identificador é imutável.
+
+- Renomear `receita_servico` para `receita_de_servico` NÃO é ajuste
+  cosmético. É migração.
+- Adicionar nova categoria é extensão. Vai para v2.
+- Remover categoria exige plano de migração dos dados existentes.
+
+### Evolução para v2
+
+A taxonomia v2 exige:
+
+1. Decisão explícita registrada em `docs/DECISOES.md`.
+2. Incremento de `TAXONOMIA_VERSION`.
+3. Plano de migração para dados existentes (se houver renomeação
+   ou remoção).
+4. Atualização do golden dataset e do runner de eval para a nova
+   versão.
+
+Enquanto v2 não for decidida, os identificadores acima são congelados.
+
+---
+
 ## 5. Schema do resultado de guardrail
 
 GuardrailResultado:
@@ -180,9 +232,39 @@ ErroAPI:
   mensagem: string
   detalhes?: Record<string, unknown>
 
-Códigos: UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMIT,
-VALIDATION_ERROR, UPSTREAM_INDISPONIVEL, IDEMPOTENCY_KEY_REUSED,
-IDEMPOTENCY_EM_ANDAMENTO, CONFLITO_VERSAO, CURSOR_INVALIDO.
+Códigos genéricos:
+  UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMIT,
+  VALIDATION_ERROR, UPSTREAM_INDISPONIVEL, INTERNAL_ERROR.
+
+Códigos de autenticação e perfil:
+  CPF_INVALIDO, EMAIL_EM_USO, CPF_EM_USO, CREDENCIAIS_INVALIDAS.
+
+Códigos de ingestão:
+  EXTRATO_ILEGIVEL, ARQUIVO_ILEGIVEL, CURSOR_INVALIDO.
+
+Códigos de idempotência:
+  IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_EM_ANDAMENTO,
+  IDEMPOTENCY_KEY_EXPIRADA.
+
+Código de conflito de versão:
+  CONFLITO_VERSAO.
+
+Status dos códigos:
+  EMITIDOS em M1–M3a:
+    UNAUTHORIZED, RATE_LIMIT, VALIDATION_ERROR, INTERNAL_ERROR,
+    CPF_INVALIDO, EMAIL_EM_USO, CPF_EM_USO, CREDENCIAIS_INVALIDAS,
+    EXTRATO_ILEGIVEL, ARQUIVO_ILEGIVEL, CURSOR_INVALIDO,
+    IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_EM_ANDAMENTO,
+    IDEMPOTENCY_KEY_EXPIRADA.
+
+  RESERVADOS (previstos, ainda não emitidos):
+    FORBIDDEN, NOT_FOUND, CONFLICT, UPSTREAM_INDISPONIVEL,
+    CONFLITO_VERSAO.
+
+Regra: todo código emitido pelo backend em `detail.erro` precisa
+estar nesta lista. Adicionar código sem contrato é violação.
+Código reservado que nunca for emitido pode ser removido do contrato
+em revisão futura — sem pressa, sem cerimônia.
 
 ---
 
