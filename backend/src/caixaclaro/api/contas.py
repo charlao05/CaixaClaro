@@ -47,4 +47,11 @@ async def revogar_conta(id: str, u: dict = Depends(usuario)):
     async with conexao() as conn:
         return await revogar_item(conn, u["id"], id)
 
+@router.post("/{id}/sync", status_code=202)
+async def sincronizar_conta(id: str, u: dict = Depends(usuario)):
+    from ..services.contas import iniciar_sync
+    async with conexao() as conn:
+        return await iniciar_sync(conn, u["id"], id)
+
+
 
