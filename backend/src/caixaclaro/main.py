@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .db import abrir_pool, fechar_pool
-from .api import auth, billing, contas, perfil, sync, transacoes, webhooks
+from .api import auth, billing, contas, perfil, sync, transacoes, webhooks, telegram
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ def criar_app() -> FastAPI:
     app.include_router(webhooks.router,  prefix="/api/v1/webhooks",  tags=["webhooks"])
     app.include_router(sync.router,      prefix="/api/v1/sync",      tags=["sync"])
     app.include_router(billing.router,   prefix="/api/v1/billing",   tags=["billing"])
+    app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
     app.include_router(billing.payments_router, prefix="/api/v1/payments", tags=["payments"])
 
     @app.get("/health")
@@ -64,3 +65,4 @@ def criar_app() -> FastAPI:
 
 
 app = criar_app()
+
