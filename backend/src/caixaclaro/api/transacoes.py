@@ -363,7 +363,7 @@ def _serializar_fila(r) -> dict:
 @router.get("/fila")
 async def fila(
     request: Request,
-    limite: int = Query(50, ge=1, le=200),
+    limite: int = Query(50, ge=1, le=500),
     cursor: str | None = Query(None),
     u: dict = Depends(usuario),
 ):
@@ -592,7 +592,7 @@ async def listar_alertas_endpoint(
     request: Request,
     apenas_nao_lidos: bool = Query(False),
     tipo: str | None = Query(None),
-    limite: int = Query(50, ge=1, le=200),
+    limite: int = Query(50, ge=1, le=500),
     cursor: str | None = Query(None),
     u: dict = Depends(usuario),
 ):

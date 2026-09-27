@@ -104,6 +104,83 @@ async def test_alertas_apenas_nao_lidos(client):
     assert len(r.json()["itens"]) >= 1
 
 
+async def test_alertas_cursor_e_has_more(client):
+    token = await _registrar(
+        client,
+        email="cur_alertas@x.com",
+        cpf="303.303.303-30",
+    )
+
+    # R$ 100.000 cruza 60%, 80%, 90%, 95%, 100% e 120%:
+    # gera 6 alertas pelo fluxo oficial de faturamento.
+    r = await _colar(
+        client,
+        token,
+        "25/09 CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA R$ 100.000,00",
+    )
+    assert r.status_code == 201, r.json()
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Pagina 1: 2 de 6.
+    r = await client.get(
+        "/api/v1/transacoes/alertas?limite=2",
+        headers=headers,
+    )
+    assert r.status_code == 200, r.json()
+    p1 = r.json()
+
+    assert len(p1["itens"]) == 2
+    assert p1["has_more"] is True
+    assert p1["next_cursor"] is not None
+
+    # Pagina 2: mais 2, sem repetir a pagina 1.
+    r = await client.get(
+        f"/api/v1/transacoes/alertas?limite=2&cursor={p1['next_cursor']}",
+        headers=headers,
+    )
+    assert r.status_code == 200, r.json()
+    p2 = r.json()
+
+    assert len(p2["itens"]) == 2
+    assert p2["has_more"] is True
+    assert p2["next_cursor"] is not None
+
+    ids_p1 = {i["id"] for i in p1["itens"]}
+    ids_p2 = {i["id"] for i in p2["itens"]}
+    assert ids_p1.isdisjoint(ids_p2)
+
+    # Pagina 3: últimos 2 alertas.
+    r = await client.get(
+        f"/api/v1/transacoes/alertas?limite=2&cursor={p2['next_cursor']}",
+        headers=headers,
+    )
+    assert r.status_code == 200, r.json()
+    p3 = r.json()
+
+    assert len(p3["itens"]) == 2
+    assert p3["has_more"] is False
+    assert p3["next_cursor"] is None
+
+    ids_p3 = {i["id"] for i in p3["itens"]}
+    assert ids_p1.isdisjoint(ids_p3)
+    assert ids_p2.isdisjoint(ids_p3)
+
+
+async def test_alertas_cursor_malformado_400(client):
+    token = await _registrar(
+        client,
+        email="cur_alertas2@x.com",
+        cpf="404.404.404-40",
+    )
+
+    r = await client.get(
+        "/api/v1/transacoes/alertas?cursor=nao-e-base64-valido!!",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400
+
+
 async def test_alertas_filtro_tipo(client):
     token = await _registrar(client, email="al4@x.com", cpf="444.444.444-44")
     await _criar_alerta_60(client, token)
@@ -248,3 +325,4 @@ async def test_fila_cursor_malformado_400(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 400
+
