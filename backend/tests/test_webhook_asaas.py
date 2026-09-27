@@ -217,3 +217,56 @@ async def test_webhook_payment_received_confirma(client):
     r = await _post_asaas(client, "PAYMENT_RECEIVED", "pay_ext_1", ref)
     assert r.status_code == 200
     assert r.json()["status"] == "confirmado"
+
+
+async def test_webhook_confirma_pendente_reconciliacao(client):
+    """pendente_reconciliacao + PAYMENT_CONFIRMED -> confirmado.
+
+    Cenario do crash pos-POST que a reconciliacao do Asaas resolve.
+    """
+    uid = await _registrar(client, "wh10@x.com", "220.220.220-20")
+    async with conexao() as conn:
+        _, ref = await _criar_payment(conn, uid, status="pendente_reconciliacao")
+
+    r = await _post_asaas(client, "PAYMENT_CONFIRMED", "pay_ext_1", ref)
+    assert r.status_code == 200, r.json()
+    body = r.json()
+    assert body["status"] == "confirmado"
+    assert body["politica_b"] is False
+
+    async with conexao() as conn:
+        st = await conn.fetchval(
+            "SELECT status FROM payments WHERE user_id = $1", uid
+        )
+        sub = await conn.fetchrow(
+            "SELECT status FROM subscriptions WHERE user_id = $1", uid
+        )
+    assert st == "confirmado"
+    assert sub is not None and sub["status"] == "ativa"
+
+
+async def test_webhook_confirma_falhou(client):
+    """falhou + PAYMENT_CONFIRMED -> confirmado.
+
+    O Asaas diz que foi pago; nosso 'falhou' era erro interno.
+    A verdade do dinheiro vem do provedor.
+    """
+    uid = await _registrar(client, "wh11@x.com", "221.221.221-21")
+    async with conexao() as conn:
+        _, ref = await _criar_payment(conn, uid, status="falhou")
+
+    r = await _post_asaas(client, "PAYMENT_CONFIRMED", "pay_ext_1", ref)
+    assert r.status_code == 200, r.json()
+    body = r.json()
+    assert body["status"] == "confirmado"
+    assert body["politica_b"] is False
+
+    async with conexao() as conn:
+        st = await conn.fetchval(
+            "SELECT status FROM payments WHERE user_id = $1", uid
+        )
+        sub = await conn.fetchrow(
+            "SELECT status FROM subscriptions WHERE user_id = $1", uid
+        )
+    assert st == "confirmado"
+    assert sub is not None and sub["status"] == "ativa"
