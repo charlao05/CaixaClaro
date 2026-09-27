@@ -102,3 +102,51 @@ async def processar_item_created(conn, payload: dict) -> dict:
         "sync_requests": criados,
     }
 
+async def revogar_item(conn, user_id, account_id) -> dict:
+    """Revoga o Item Pluggy ao qual a conta pertence.
+
+    Ordem obrigatoria: consulta Pluggy ANTES de marcar revogado_em.
+    Se o DELETE externo falhar, nada e marcado localmente.
+    Idempotente: consent ja revogado -> nao chama Pluggy de novo.
+    """
+    row = await conn.fetchrow(
+        "SELECT item_id FROM accounts WHERE id = $1 AND user_id = $2",
+        account_id,
+        user_id,
+    )
+    if row is None:
+        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta nao encontrada.")
+    item_id = row["item_id"]
+    if not item_id:
+        raise erro(409, "CONTA_SEM_ITEM", "Conta sem Item Pluggy vinculado.")
+
+    consent = await conn.fetchrow(
+        """
+        SELECT revogado_em FROM consents
+         WHERE provider = 'pluggy'
+           AND provider_user_id = $1
+           AND user_id = $2
+        """,
+        item_id,
+        user_id,
+    )
+    if consent and consent["revogado_em"] is not None:
+        return {"item_id": item_id, "ja_revogado": True}
+
+    await pluggy.revogar_item(item_id)
+
+    await conn.execute(
+        """
+        UPDATE consents
+           SET revogado_em = now()
+         WHERE provider = 'pluggy'
+           AND provider_user_id = $1
+           AND user_id = $2
+           AND revogado_em IS NULL
+        """,
+        item_id,
+        user_id,
+    )
+    return {"item_id": item_id, "ja_revogado": False}
+
+
