@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     pluggy_client_id:str|None=None
     pluggy_client_secret:str|None=None
     pluggy_base_url:str='https://api.pluggy.ai'
+    asaas_api_key:str|None=None
+    asaas_base_url:str='https://api.asaas.com/v3'
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_minimo(cls,v):
