@@ -13,6 +13,7 @@ from ..db import conexao
 from ..security.erros import erro
 from ..services.contas import processar_item_created
 from ..services.billing import processar_webhook_asaas
+from ..services.telegram import vincular_por_token
 
 router = APIRouter()
 
@@ -80,3 +81,53 @@ async def webhook_asaas(request: Request):
                 return {"ok": True, "duplicado": True}
 
             return await processar_webhook_asaas(conn, payload)
+
+
+@router.post("/telegram")
+async def webhook_telegram(request: Request):
+    """Recebe update do Telegram. Unico fluxo que grava telegram_chat_id.
+
+    Vinculacao ocorre quando chega mensagem /start <token>. Outros
+    updates sao registrados mas ignorados.
+    """
+    payload = await request.json()
+    update_id = payload.get("update_id")
+    if update_id is None:
+        raise erro(
+            400,
+            "WEBHOOK_PAYLOAD_INVALIDO",
+            "update_id obrigatorio.",
+        )
+
+    async with conexao() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                INSERT INTO webhook_events (origem, event_id, payload)
+                VALUES ('telegram', $1, $2::jsonb)
+                ON CONFLICT (origem, event_id) DO NOTHING
+                RETURNING id
+                """,
+                str(update_id),
+                json.dumps(payload, ensure_ascii=False),
+            )
+            if row is None:
+                return {"ok": True, "duplicado": True}
+
+            message = payload.get("message") or {}
+            text = message.get("text") or ""
+            chat = message.get("chat") or {}
+            chat_id = chat.get("id")
+
+            if not chat_id or not text.startswith("/start"):
+                return {"ok": True, "ignorado": True}
+
+            partes = text.split(maxsplit=1)
+            if len(partes) < 2:
+                return {"ok": True, "ignorado": "sem_token"}
+
+            token = partes[1].strip()
+            resultado = await vincular_por_token(conn, token, int(chat_id))
+            return {"ok": True, "vinculado": resultado}
+
+
