@@ -95,6 +95,7 @@ Critérios:
   - [ ] Motor fiscal não existe no bundle
   - [ ] Maria Silva apenas em modo demonstração
   - [ ] services/api.ts injeta JWT
+        PULADO: nenhum artefato frontend no repositorio atual.
 
 ## M9 — Eval em CI
 Critérios:
@@ -111,3 +112,5 @@ Critérios:
   - [ ] Backup e observabilidade ativos
   - [ ] Rollback ensaiado
   - [ ] Primeiro usuário real end-to-end
+        ABERTO: via API ou via UI? Depende de M8.
+        BLOQUEADO EM: escolha do ambiente-alvo (VPS / PaaS / outro).
