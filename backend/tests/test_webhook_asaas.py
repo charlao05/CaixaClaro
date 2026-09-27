@@ -270,3 +270,72 @@ async def test_webhook_confirma_falhou(client):
         )
     assert st == "confirmado"
     assert sub is not None and sub["status"] == "ativa"
+
+
+async def test_webhook_user_id_do_payload_e_ignorado(client):
+    """Payload com user_id forjado NAO altera dono do payment.
+
+    user_id vem SEMPRE do payment local. Se alguem um dia adicionar
+    lookup de user_id no payload, este teste quebra.
+    """
+    uid_real = await _registrar(client, "forj1@x.com", "411.411.411-41")
+    uid_forjado = await _registrar(client, "forj2@x.com", "412.412.412-42")
+
+    async with conexao() as conn:
+        _, ref = await _criar_payment(conn, uid_real, status="pendente")
+
+    # Payload inclui user_id forjado, apontando para outro usuario
+    r = await client.post(
+        "/api/v1/webhooks/asaas",
+        json={
+            "id": f"evt-{uuid.uuid4().hex[:8]}",
+            "event": "PAYMENT_CONFIRMED",
+            "user_id": str(uid_forjado),
+            "payment": {"id": "pay_ext_1", "externalReference": ref},
+        },
+    )
+    assert r.status_code == 200, r.json()
+
+    # Subscription so existe para o dono real (nao para o forjado)
+    async with conexao() as conn:
+        sub_real = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE user_id = $1", uid_real
+        )
+        sub_forjado = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE user_id = $1", uid_forjado
+        )
+    assert sub_real == 1
+    assert sub_forjado == 0
+
+
+async def test_webhook_politica_b_grava_audit(client):
+    """Politica B precisa aparecer no audit_log com politica_b=True.
+
+    Prova que a auditoria e efetivamente registrada, nao so o retorno.
+    """
+    uid = await _registrar(client, "audit-b@x.com", "413.413.413-43")
+    async with conexao() as conn:
+        _, ref = await _criar_payment(conn, uid, status="expirado")
+
+    r = await _post_asaas(client, "PAYMENT_CONFIRMED", "pay_ext_1", ref)
+    assert r.status_code == 200
+    assert r.json()["politica_b"] is True
+
+    async with conexao() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT meta FROM audit_log
+             WHERE user_id = $1
+               AND acao = 'PAYMENT_CONFIRMED_APLICADO'
+             ORDER BY id DESC LIMIT 1
+            """,
+            uid,
+        )
+    assert row is not None, "audit_log sem registro do PAYMENT_CONFIRMED"
+    meta = row["meta"]
+    if isinstance(meta, str):
+        import json as _json
+        meta = _json.loads(meta)
+    assert meta["politica_b"] is True
+    assert meta["status_anterior"] == "expirado"
+    assert meta["status_novo"] == "confirmado"
