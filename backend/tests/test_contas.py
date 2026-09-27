@@ -195,3 +195,295 @@ async def test_get_contas_isolamento_por_usuario(client, monkeypatch):
     )
     assert r.status_code == 200
     assert len(r.json()["itens"]) == 1
+
+
+async def test_revogar_item_sucesso_marca_consent_revogado(client, monkeypatch):
+    """Revogacao externa bem-sucedida marca o consent local."""
+    from caixaclaro.db import conexao
+    from caixaclaro.services import pluggy as pluggy_mod
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-sucesso@x.com",
+            "senha": "senha123",
+            "cpf": "101.101.101-01",
+        },
+    )
+    assert r.status_code == 201
+    token = r.json()["token"]
+
+    async with conexao() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-sucesso@x.com",
+        )
+
+    async def buscar_item(item_id):
+        return {"id": item_id}
+
+    async def listar_accounts(item_id):
+        return [{"id": "acc-rev-1", "name": "Conta Revogar"}]
+
+    chamadas = []
+
+    async def revogar_item(item_id):
+        chamadas.append(item_id)
+
+    monkeypatch.setattr(pluggy_mod, "buscar_item", buscar_item)
+    monkeypatch.setattr(pluggy_mod, "listar_accounts", listar_accounts)
+    monkeypatch.setattr(pluggy_mod, "revogar_item", revogar_item)
+
+    r = await client.post(
+        "/api/v1/webhooks/pluggy",
+        json={
+            "event": "item/created",
+            "eventId": "evt-revoga-sucesso",
+            "itemId": "item-rev-1",
+            "clientUserId": str(user_id),
+        },
+    )
+    assert r.status_code == 200
+
+    async with conexao() as conn:
+        account_id = await conn.fetchval(
+            """
+            SELECT id FROM accounts
+             WHERE provider_account_id = 'acc-rev-1'
+               AND user_id = $1
+            """,
+            user_id,
+        )
+
+        result = await contas.revogar_item(conn, user_id, account_id)
+
+        revogado = await conn.fetchval(
+            """
+            SELECT revogado_em FROM consents
+             WHERE provider = 'pluggy'
+               AND provider_user_id = 'item-rev-1'
+               AND user_id = $1
+            """,
+            user_id,
+        )
+
+    assert result == {"item_id": "item-rev-1", "ja_revogado": False}
+    assert chamadas == ["item-rev-1"]
+    assert revogado is not None
+
+
+async def test_revogar_item_falha_externa_nao_marca_consent(client, monkeypatch):
+    """Falha na Pluggy nao pode deixar revogado_em preenchido."""
+    from caixaclaro.db import conexao
+    from caixaclaro.services import pluggy as pluggy_mod
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-falha@x.com",
+            "senha": "senha123",
+            "cpf": "102.102.102-02",
+        },
+    )
+    assert r.status_code == 201
+
+    async with conexao() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-falha@x.com",
+        )
+
+    async def buscar_item(item_id):
+        return {"id": item_id}
+
+    async def listar_accounts(item_id):
+        return [{"id": "acc-rev-2", "name": "Conta Falha"}]
+
+    async def revogar_item(item_id):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "erro": "PLUGGY_REVOGAR_FALHOU",
+                "mensagem": "Falha ao revogar Item na Pluggy.",
+            },
+        )
+
+    monkeypatch.setattr(pluggy_mod, "buscar_item", buscar_item)
+    monkeypatch.setattr(pluggy_mod, "listar_accounts", listar_accounts)
+    monkeypatch.setattr(pluggy_mod, "revogar_item", revogar_item)
+
+    r = await client.post(
+        "/api/v1/webhooks/pluggy",
+        json={
+            "event": "item/created",
+            "eventId": "evt-revoga-falha",
+            "itemId": "item-rev-2",
+            "clientUserId": str(user_id),
+        },
+    )
+    assert r.status_code == 200
+
+    async with conexao() as conn:
+        account_id = await conn.fetchval(
+            """
+            SELECT id FROM accounts
+             WHERE provider_account_id = 'acc-rev-2'
+               AND user_id = $1
+            """,
+            user_id,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await contas.revogar_item(conn, user_id, account_id)
+
+        revogado = await conn.fetchval(
+            """
+            SELECT revogado_em FROM consents
+             WHERE provider = 'pluggy'
+               AND provider_user_id = 'item-rev-2'
+               AND user_id = $1
+            """,
+            user_id,
+        )
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "PLUGGY_REVOGAR_FALHOU"
+    assert revogado is None
+
+
+async def test_revogar_item_isolamento_usuario(client):
+    """Usuario diferente nao consegue revogar a conta de outro usuario."""
+    from caixaclaro.db import conexao
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-dono@x.com",
+            "senha": "senha123",
+            "cpf": "103.103.103-03",
+        },
+    )
+    assert r.status_code == 201
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-outro@x.com",
+            "senha": "senha123",
+            "cpf": "104.104.104-04",
+        },
+    )
+    assert r.status_code == 201
+
+    async with conexao() as conn:
+        dono = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-dono@x.com",
+        )
+        outro = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-outro@x.com",
+        )
+
+        account_id = await conn.fetchval(
+            """
+            INSERT INTO accounts (
+                user_id, provider, provider_account_id, nome, item_id
+            )
+            VALUES ($1, 'pluggy', 'acc-isolamento', 'Conta', 'item-isolamento')
+            RETURNING id
+            """,
+            dono,
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await contas.revogar_item(conn, outro, account_id)
+
+    assert exc.value.status_code == 404
+    assert exc.value.detail["erro"] == "CONTA_NAO_ENCONTRADA"
+
+
+async def test_revogar_item_idempotente_nao_chama_pluggy_de_novo(client, monkeypatch):
+    """Segunda revogacao retorna ja_revogado=True sem chamar Pluggy."""
+    from caixaclaro.db import conexao
+    from caixaclaro.services import pluggy as pluggy_mod
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-idem@x.com",
+            "senha": "senha123",
+            "cpf": "105.105.105-05",
+        },
+    )
+    assert r.status_code == 201
+
+    async with conexao() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-idem@x.com",
+        )
+
+    async def buscar_item(item_id):
+        return {"id": item_id}
+
+    async def listar_accounts(item_id):
+        return [{"id": "acc-idem", "name": "Conta Idem"}]
+
+    chamadas = []
+
+    async def revogar_item(item_id):
+        chamadas.append(item_id)
+
+    monkeypatch.setattr(pluggy_mod, "buscar_item", buscar_item)
+    monkeypatch.setattr(pluggy_mod, "listar_accounts", listar_accounts)
+    monkeypatch.setattr(pluggy_mod, "revogar_item", revogar_item)
+
+    r = await client.post(
+        "/api/v1/webhooks/pluggy",
+        json={
+            "event": "item/created",
+            "eventId": "evt-revoga-idem",
+            "itemId": "item-idem",
+            "clientUserId": str(user_id),
+        },
+    )
+    assert r.status_code == 200
+
+    async with conexao() as conn:
+        account_id = await conn.fetchval(
+            "SELECT id FROM accounts WHERE provider_account_id = 'acc-idem' AND user_id = $1",
+            user_id,
+        )
+        r1 = await contas.revogar_item(conn, user_id, account_id)
+        r2 = await contas.revogar_item(conn, user_id, account_id)
+
+    assert r1 == {"item_id": "item-idem", "ja_revogado": False}
+    assert r2 == {"item_id": "item-idem", "ja_revogado": True}
+    assert chamadas == ["item-idem"]
+
+
+async def test_revogar_item_conta_inexistente_404(client):
+    """UUID valido mas sem conta correspondente -> 404."""
+    from caixaclaro.db import conexao
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "revoga-404@x.com",
+            "senha": "senha123",
+            "cpf": "106.106.106-06",
+        },
+    )
+    assert r.status_code == 201
+
+    async with conexao() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1",
+            "revoga-404@x.com",
+        )
+        with pytest.raises(HTTPException) as exc:
+            await contas.revogar_item(conn, user_id, uuid.uuid4())
+
+    assert exc.value.status_code == 404
+    assert exc.value.detail["erro"] == "CONTA_NAO_ENCONTRADA"
