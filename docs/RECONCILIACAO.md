@@ -76,22 +76,52 @@ Eval/golden dataset permanece no backend/CI, fora do bundle do cliente.
 
 ## 5. Matriz IMPLEMENTADO / VERIFICADO / PASS / PRODUÇÃO
 
+> **Nota de temporalidade:** a matriz abaixo é uma fotografia histórica da
+> restauração do M0 e não deve ser usada como estado atual do main.
+> O estado atual foi reconciliado em 27/09/2026 contra o commit
+> ea8699897f1a0d1a7e93302697bed6fa66622cfa.
+
 | Área | IMPLEMENTADO | VERIFICADO | PASS | PRODUÇÃO |
 |---|---|---|---|---|
 | Documentação M0 | SIM | SIM, por inspeção | Pendente desta restauração | NÃO |
-| Backend/API | NÃO | NÃO | NÃO | NÃO |
-| Segurança | NÃO | NÃO | NÃO | NÃO |
-| Ingestão | NÃO | NÃO | NÃO | NÃO |
-| Inteligência fiscal | NÃO | NÃO | NÃO | NÃO |
-| Billing | NÃO | NÃO | NÃO | NÃO |
-| Workers | NÃO | NÃO | NÃO | NÃO |
-| Telegram | NÃO | NÃO | NÃO | NÃO |
+| Backend/API | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Segurança | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Ingestão | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Inteligência fiscal | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Billing | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Workers | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
+| Telegram | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Frontend | Protótipo fora do repo | NÃO | NÃO | NÃO |
-| Eval | NÃO | NÃO | NÃO | NÃO |
+| Eval | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Produção | NÃO | NÃO | NÃO | NÃO |
 
-A matriz não transforma inspeção documental em PASS. PASS só existe quando a evidência correspondente foi executada.
+A matriz permanece como registro histórico do ponto de partida. Ela não
+transforma inspeção documental em PASS e não substitui a fotografia atual
+do repositório.
 
-## 6. Regra de reconciliação
+## 6. Fotografia atual e regra de reconciliação
+
+Estado atual verificado contra main em ea8699897f1a0d1a7e93302697bed6fa66622cfa:
+
+- Backend/API: implementado e testado em múltiplas baterias; não equivale
+  a produção pública.
+- Segurança: implementada e testada no desenho atual.
+- Ingestão: implementada; permanecem dívidas de evidência D1–D5.
+- Inteligência fiscal: implementada; golden/eval atual PASS.
+- Billing: implementado; permanecem os quatro testes B11/B12 sem definição
+  recuperável.
+- Workers: implementados e testados.
+- Telegram: implementado e testado; produção ainda depende de configuração.
+- Frontend: continua ausente deste repositório.
+- Eval/CI: implementado; M9.4 permanece bloqueado pela definição A–H
+  não recuperável.
+- Produção M10a: fundação implementada parcialmente; backup/restore,
+  rollback ensaiado, deploy real e segredos/configuração de produção
+  permanecem pendentes.
+
+A matriz histórica acima não deve ser interpretada como uma lista de
+pendências atuais.
+
+## 7. Regra de reconciliação
 
 A arquitetura do protótipo AI Studio não é a arquitetura de produção. O destino autoritativo é o backend/CI/PostgreSQL descrito nos contratos M0. Nenhuma funcionalidade client-side é considerada implementada no backend apenas por existir no protótipo.

@@ -31,7 +31,7 @@ MEDIDO como ausente:
 
 - backup, restore, rollback, observabilidade de produção
 - aplicação de migrations em produção (hoje só conftest.py aplica)
-- autenticação de webhooks
+- configuração dos segredos de webhook no ambiente de produção
 
 ## Decisão
 
@@ -89,10 +89,12 @@ MEDIDO como ausente:
 
    Mecanismo nativo de cada provedor:
 
-   - Pluggy:   verificar assinatura HMAC no header
+   - Pluggy:   header X-CaixaClaro-Webhook-Secret
    - Asaas:    verificar token de webhook configurado no painel
    - Telegram: usar secret_token no setWebhook e verificar o header
                X-Telegram-Bot-Api-Secret-Token
+
+   Não há HMAC no mecanismo Pluggy adotado pelo CaixaClaro.
 
    Sem essa verificação, os endpoints não devem receber tráfego público.
 

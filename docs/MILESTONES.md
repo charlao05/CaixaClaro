@@ -8,41 +8,60 @@ Critérios de aceite:
   - [ ] Commit raiz com mensagem "chore: establish CaixaClaro M0..."
 
 ## M1 — Backend base + auth + perfil
+**Estado reconciliado em 27/09/2026 contra ea86998: implementado e testado.**
+
 Critérios:
-  - [ ] docker compose up sobe backend + postgres
-  - [ ] Migration 001 executa sem erro
-  - [ ] POST /auth/register → 201 com JWT
-  - [ ] POST /auth/login → 200 com JWT
-  - [ ] POST /auth/logout → 200; JWT revogado é rejeitado
-  - [ ] GET /perfil, PATCH /perfil funcionam
-  - [ ] JWT.exp == sessions.expira_em (verificado)
-  - [ ] telegram_chat_id fora do PATCH /perfil
-  - [ ] Testes de aceite de cada endpoint PASS
+  - [x] docker compose up sobe backend + postgres
+  - [x] Migration 001 executa sem erro
+  - [x] POST /auth/register → 201 com JWT
+  - [x] POST /auth/login → 200 com JWT
+  - [x] POST /auth/logout → 200; JWT revogado é rejeitado
+  - [x] GET /perfil, PATCH /perfil funcionam
+  - [x] JWT.exp == sessions.expira_em (verificado)
+  - [x] telegram_chat_id fora do PATCH /perfil
+  - [x] Testes de aceite de cada endpoint PASS
 
 ## M2 — Segurança
-Critérios:
-  - [ ] CPF armazenado como HMAC + AES-GCM; nunca claro
-  - [ ] JWT tem expiração; sessão revogada rejeitada
-  - [ ] Cadastro duplicado retorna 409
-  - [ ] Rate limit de login comprovado
-  - [ ] Auditoria de tentativa falha
+**Estado reconciliado em 27/09/2026 contra ea86998: implementado e testado no desenho atual.**
 
-## M3a — Ingestão pura
+Critérios:
+  - [x] CPF armazenado como HMAC + AES-GCM; nunca claro
+  - [x] JWT tem expiração; sessão revogada rejeitada
+  - [x] Cadastro duplicado retorna 409
+  - [x] Rate limit de login comprovado
+  - [x] Auditoria de tentativa falha
+
+> Observação: rate limiting continua por processo; isso não é tratado como
+> bloqueio enquanto o alvo M10a permanece uma VPS única.
+
+## M3a — Ingestão
 
 Origem: M3 original foi repartido em M3a e M3b. O critério original
 "POST /transacoes/extrato/colar retorna classificação" era erro do plano:
-misturava ingestão com classificação. Classificação é M4.
+misturava ingestão com classificação.
+
+**Estado reconciliado em 27/09/2026 contra ea86998: implementação presente
+e bateria executada, com uma divergência arquitetural em relação ao
+contrato histórico de "ingestão pura".**
 
 Critérios:
-  - [ ] POST /transacoes/extrato/colar parseia e persiste (sem classificar)
-  - [ ] POST /transacoes/importar aceita CSV e OFX, convergindo para o mesmo formato
-  - [ ] GET /transacoes com paginação por cursor (data DESC, id DESC)
-  - [ ] Idempotency-Key obrigatório em ambos os POSTs
-  - [ ] valor é string decimal na API; JSON number retorna 422
-  - [ ] line_index 0-based pós-parser
-  - [ ] needs_review = NULL em toda transação de M3a
-  - [ ] Isolamento por usuário garantido
-  - [ ] Bateria de M3a passando (12 critérios de docs/M3a_CONTRATO.md §7)
+  - [x] POST /transacoes/extrato/colar parseia e persiste
+  - [x] POST /transacoes/importar aceita CSV e OFX, convergindo para o mesmo formato
+  - [x] GET /transacoes com paginação por cursor (data DESC, id DESC)
+  - [x] Idempotency-Key obrigatório em ambos os POSTs
+  - [x] valor é string decimal na API; JSON number retorna 422
+  - [x] line_index 0-based pós-parser
+  - [~] needs_review = NULL em toda transação de M3a — contrato histórico
+        não corresponde mais ao fluxo atual: M4 classifica/triage no mesmo
+        passo transacional da ingestão
+  - [x] Isolamento por usuário garantido
+  - [x] Bateria de M3a passando, com dívidas de evidência D1–D5 registradas
+
+> **Reconciliação M3a × M4:** o estado atual não deve ser "corrigido" para
+> voltar a needs_review = NULL. A implementação posterior de M4 incorporou
+> classificação e triagem no mesmo passo transacional da ingestão. O
+> contrato/documentação histórica é que precisa ser atualizado em revisão
+> específica, se desejado.
 
 ## M3b — Pluggy
 
@@ -53,14 +72,19 @@ Critérios:
   - [x] Webhook item/created fecha ciclo (consent + accounts + sync_requests)
   - [x] Bateria C (H2 clientUserId) executada
 ## M4 — Inteligência fiscal
+**Estado reconciliado em 27/09/2026 contra ea86998: implementado; eval atual PASS.**
+
 Critérios:
-  - [ ] Classificação roda no servidor
-  - [ ] Guardrails bloqueiam casos NUNCA
-  - [ ] Parecer de 7 estágios gerado no servidor
-  - [ ] fiscal_state atualizado no mesmo passo da ingestão
-  - [ ] Golden dataset em tests/golden/
-  - [ ] Eval contra golden dataset: zero violações NUNCA
-  - [ ] Sync não sobrescreve confirmação do usuário
+  - [x] Classificação roda no servidor
+  - [x] Guardrails bloqueiam casos NUNCA
+  - [x] Parecer de 7 estágios gerado no servidor
+  - [x] fiscal_state atualizado no mesmo passo da ingestão
+  - [x] Golden dataset em tests/golden/
+  - [x] Eval contra golden dataset: zero violações NUNCA
+  - [x] Sync não sobrescreve confirmação do usuário
+
+> O PASS do golden/eval é evidência sobre o dataset versionado atual; não
+> é uma garantia de comportamento universal fora dessa cobertura.
 
 ## M5 — Billing
 Critérios:
