@@ -282,3 +282,59 @@ async def test_revogar_item_404_e_sucesso(monkeypatch):
     )
 
     await pluggy_mod.revogar_item("item-inexistente")
+
+
+async def test_listar_transactions(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        if request.url.path == "/transactions":
+            assert request.method == "GET"
+            assert request.headers["X-API-KEY"] == "api-key"
+            assert request.url.params["accountId"] == "acc-1"
+            assert request.url.params["page"] == "1"
+            assert request.url.params["pageSize"] == "500"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": "tx-1", "date": "2026-09-01", "amount": 100.5},
+                        {"id": "tx-2", "date": "2026-09-02", "amount": -50.0},
+                    ],
+                    "total": 2,
+                    "page": 1,
+                    "totalPages": 1,
+                },
+            )
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx, "AsyncClient", _mock_transport(handler)
+    )
+
+    out = await pluggy_mod.listar_transactions("acc-1")
+
+    assert out["totalPages"] == 1
+    assert len(out["results"]) == 2
+    assert out["results"][0]["id"] == "tx-1"
+
+
+async def test_listar_transactions_falha_erro_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx, "AsyncClient", _mock_transport(handler)
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await pluggy_mod.listar_transactions("acc-1")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "PLUGGY_TRANSACTIONS_FALHOU"

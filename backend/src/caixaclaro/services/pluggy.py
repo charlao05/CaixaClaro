@@ -94,6 +94,34 @@ async def listar_accounts(item_id: str) -> list:
         return r.json()["results"]
 
 
+
+async def listar_transactions(
+    account_id: str, page: int = 1, page_size: int = 500
+) -> dict:
+    """GET /transactions?accountId={id}. Retorna payload completo da pagina.
+
+    Devolve {results, total, page, totalPages} — o worker precisa de
+    totalPages para paginar.
+    """
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=30.0) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.get(
+            "/transactions",
+            params={
+                "accountId": account_id,
+                "page": page,
+                "pageSize": page_size,
+            },
+            headers={"X-API-KEY": api_key},
+        )
+        if r.status_code != 200:
+            raise erro(
+                502,
+                "PLUGGY_TRANSACTIONS_FALHOU",
+                "Falha ao listar transacoes na Pluggy.",
+            )
+        return r.json()
 async def revogar_item(item_id: str) -> None:
     """DELETE /items/{item_id}. Revoga Item e consent na Pluggy.
 
@@ -114,5 +142,7 @@ async def revogar_item(item_id: str) -> None:
             "PLUGGY_REVOGAR_FALHOU",
             "Falha ao revogar Item na Pluggy.",
         )
+
+
 
 
