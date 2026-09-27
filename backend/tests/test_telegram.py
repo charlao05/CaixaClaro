@@ -1,5 +1,6 @@
 """Bateria M7 — vinculacao Telegram por token (CONTRATO_API §Telegram)."""
 import uuid
+from unittest.mock import AsyncMock
 from datetime import datetime, timedelta, timezone
 
 from caixaclaro.db import conexao
@@ -99,6 +100,30 @@ async def test_telegram_vincula_chat_por_start(client):
     assert ativos == 0
 
 
+async def test_telegram_start_envia_confirmacao(client, monkeypatch):
+    token_jwt, uid = await _registrar(
+        client, "tg2b@x.com", "342.342.342-52"
+    )
+
+    r = await _gerar_token(client, token_jwt)
+    token = r.json()["token"]
+
+    enviar = AsyncMock(return_value={"ok": True})
+    monkeypatch.setattr(
+        "caixaclaro.api.webhooks.telegram_bot.enviar_mensagem",
+        enviar,
+    )
+
+    r = await _webhook(
+        client, update_id=1002, text=f"/start {token}", chat_id=55556
+    )
+
+    assert r.status_code == 200, r.text
+    enviar.assert_awaited_once_with(
+        55556,
+        "CaixaClaro vinculado com sucesso. "
+        "Voce vai receber aqui alertas de faturamento e DAS.",
+    )
 async def test_telegram_token_expirado_400(client):
     token_jwt, uid = await _registrar(
         client, "tg3@x.com", "343.343.343-43"
@@ -184,3 +209,4 @@ async def test_telegram_webhook_sem_update_id_400(client):
 async def test_telegram_gerar_token_sem_jwt_401(client):
     r = await client.post("/api/v1/telegram/token-vinculacao")
     assert r.status_code == 401
+
