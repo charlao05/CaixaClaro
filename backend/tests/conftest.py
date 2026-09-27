@@ -1,6 +1,9 @@
 import os
+from pathlib import Path
 
+import asyncpg
 import httpx
+import pytest_asyncio
 import pytest
 from httpx import ASGITransport
 
@@ -18,6 +21,42 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql://caixaclaro:dev_only_change_me@localhost:5432/caixaclaro",
 )
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _aplicar_migracoes():
+    """Aplica migrations/*.sql em ordem alfabetica, uma vez por sessao.
+
+    Tolerante a reexecucao: se uma tabela/coluna/indice ja existe
+    (porque o banco foi migrado manualmente), segue em frente.
+    Nao usa tabela de controle — o estado do banco e a fonte de verdade.
+    """
+    from caixaclaro.config import settings
+
+    raiz = Path(__file__).parent.parent
+    migrations = sorted((raiz / "migrations").glob("*.sql"))
+    if not migrations:
+        return
+
+    conn = await asyncpg.connect(settings().database_url)
+    try:
+        for sql_path in migrations:
+            sql = sql_path.read_text(encoding="utf-8")
+            # Cada statement em sua propria chamada: multi-statement aborta
+            # tudo numa transacao implicita se um falhar. Split simples e
+            # suficiente: as migrations nao tem funcoes nem dollar-quoting.
+            for stmt in (s.strip() for s in sql.split(";") if s.strip()):
+                try:
+                    await conn.execute(stmt)
+                except (
+                    asyncpg.exceptions.DuplicateTableError,
+                    asyncpg.exceptions.DuplicateObjectError,
+                    asyncpg.exceptions.DuplicateColumnError,
+                    asyncpg.exceptions.DuplicateSchemaError,
+                ):
+                    pass
+    finally:
+        await conn.close()
 
 
 @pytest.fixture
