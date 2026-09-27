@@ -223,3 +223,62 @@ async def test_listar_accounts_falha_erro_502(monkeypatch):
 
     assert exc.value.status_code == 502
     assert exc.value.detail["erro"] == "PLUGGY_ACCOUNTS_FALHOU"
+
+async def test_revogar_item(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        if request.url.path == "/items/item-123":
+            assert request.method == "DELETE"
+            assert request.headers["X-API-KEY"] == "api-key"
+            return httpx.Response(200, json={"id": "item-123"})
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    await pluggy_mod.revogar_item("item-123")
+
+
+async def test_revogar_item_falha_erro_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await pluggy_mod.revogar_item("item-123")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "PLUGGY_REVOGAR_FALHOU"
+
+
+async def test_revogar_item_404_e_sucesso(monkeypatch):
+    """404 e sucesso: item ja nao existe, estado desejado satisfeito."""
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    await pluggy_mod.revogar_item("item-inexistente")
