@@ -149,4 +149,62 @@ async def revogar_item(conn, user_id, account_id) -> dict:
     )
     return {"item_id": item_id, "ja_revogado": False}
 
+async def iniciar_sync(conn, user_id, account_id) -> dict:
+    """Retorna sync_request pendente ou cria um novo.
+
+    Idempotente: se ja existe pendente para a conta, reusa.
+    Nao executa sync — apenas enfileira (worker e M6).
+    """
+    row = await conn.fetchrow(
+        "SELECT id FROM accounts WHERE id = $1 AND user_id = $2",
+        account_id,
+        user_id,
+    )
+    if row is None:
+        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta nao encontrada.")
+
+    existente = await conn.fetchrow(
+        """
+        SELECT id, status FROM sync_requests
+         WHERE account_id = $1 AND status = 'pendente'
+         LIMIT 1
+        """,
+        account_id,
+    )
+    if existente is not None:
+        return {"sync_id": str(existente["id"]), "status": existente["status"]}
+
+    novo = await conn.fetchrow(
+        """
+        INSERT INTO sync_requests (user_id, account_id, status)
+        VALUES ($1, $2, 'pendente')
+        RETURNING id, status
+        """,
+        user_id,
+        account_id,
+    )
+    return {"sync_id": str(novo["id"]), "status": novo["status"]}
+
+
+async def obter_sync(conn, user_id, sync_id) -> dict:
+    """Retorna estado de um sync_request do usuario. 404 se nao existir."""
+    row = await conn.fetchrow(
+        """
+        SELECT id, status, erro, criado_em
+          FROM sync_requests
+         WHERE id = $1 AND user_id = $2
+        """,
+        sync_id,
+        user_id,
+    )
+    if row is None:
+        raise erro(404, "SYNC_NAO_ENCONTRADO", "Sincronizacao nao encontrada.")
+    return {
+        "sync_id": str(row["id"]),
+        "status": row["status"],
+        "erro": row["erro"],
+        "criado_em": row["criado_em"].isoformat(),
+    }
+
+
 
