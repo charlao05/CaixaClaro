@@ -84,7 +84,7 @@ Critérios:
 
 ## M7 — Telegram
 Critérios:
-  - [~] Bot real responde /start — PENDENTE: credencial Telegram ausente
+  - [x] Bot real responde /start
   - [x] Token único ativo por usuário (coluna ativo)
   - [x] Chat_id vinculado ao usuário correto
   - [~] Alerta de DAS enviado — PENDENTE: credencial Telegram ausente

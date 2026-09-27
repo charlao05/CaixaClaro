@@ -178,3 +178,16 @@ Confirma que TELEGRAM_BOT_TOKEN está correta e que o backend
 consegue autenticar na Bot API. Nao prova ainda o ciclo
 /start -> vinculacao -> resposta (isso exige entrega real,
 registrado em §M7 da DECISOES).
+
+## 2026-09-27 — Telegram: ciclo /start provado E2E
+
+Script de prova (descartado apos execucao):
+  - obteve chat_id real via getUpdates
+  - registrou usuario, gerou link_token
+  - POST /webhooks/telegram com payload /start <token>
+  - webhook retornou 200 vinculado=true
+  - sendMessage entregou no Telegram (sem erro no handler)
+
+Prova real dos 4 estagios do ciclo Telegram:
+credencial valida -> token -> vinculacao -> resposta.
+Arquivo temporario removido; codigo de producao intacto.
