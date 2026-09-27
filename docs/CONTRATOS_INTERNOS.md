@@ -78,6 +78,14 @@ Colunas em transactions:
 ClassificacaoResultado:
   categoria: string
   proposito: string
+    # Valores validos (Literal em domain/fiscal/classificacao.py):
+    #   trabalho_servico | venda_produto | salario_formal
+    #   beneficio_inss | tributo_das | tarifa_bancaria | iof
+    #   gasto_negocio | gasto_pessoal | transferencia_interna
+    #   reembolso_operacional | emprestimo_recebido | emprestimo_concedido
+    #   retirada_titular | indeterminado
+    #
+    # Este campo e contrato com o frontend: nao pode ser renomeado sem v2.
   origem_sugerida: string
   patrimonio: pessoa_fisica | atividade_negocio | ponte_pf_pj | transito_terceiro
   tratamento_tributario: tributavel_irpf | isento_nao_tributavel | carne_leao_potencial | faturamento_pj | retencao_fonte | indeterminado_pendente
