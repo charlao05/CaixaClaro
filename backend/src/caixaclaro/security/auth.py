@@ -1,13 +1,16 @@
 """Auth conforme docs/CONTRATOS_INTERNOS.md §1."""
 from datetime import datetime, timedelta, timezone
 import uuid
+
 import bcrypt as _bcrypt
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt, JWTError
+
 from ..config import settings
 from ..db import conexao
 from .erros import erro
+
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -35,6 +38,7 @@ async def criar_sessao(user_id: str) -> tuple[str, datetime]:
         datetime.now(timezone.utc).replace(microsecond=0)
         + timedelta(minutes=settings().jwt_expira_minutos)
     )
+
     async with conexao() as conn:
         await conn.execute(
             "INSERT INTO sessions (id, user_id, expira_em) VALUES ($1,$2,$3)",
@@ -42,16 +46,22 @@ async def criar_sessao(user_id: str) -> tuple[str, datetime]:
             uuid.UUID(user_id),
             expira_em,
         )
+
     return str(sid), expira_em
 
 
-def gerar_token(user_id: str, session_id: str, expira_em: datetime) -> str:
+def gerar_token(
+    user_id: str,
+    session_id: str,
+    expira_em: datetime,
+) -> str:
     payload = {
         "sub": user_id,
         "sid": session_id,
         "iat": datetime.now(timezone.utc),
         "exp": int(expira_em.timestamp()),
     }
+
     return jwt.encode(
         payload,
         settings().jwt_secret,
@@ -84,23 +94,33 @@ async def usuario_atual(
         raise erro(401, "UNAUTHORIZED")
 
     sid, sub = payload.get("sid"), payload.get("sub")
+
     if not sid or not sub:
+        raise erro(401, "UNAUTHORIZED")
+
+    try:
+        sid_uuid = uuid.UUID(sid)
+        sub_uuid = uuid.UUID(sub)
+    except (ValueError, AttributeError, TypeError):
         raise erro(401, "UNAUTHORIZED")
 
     async with conexao() as conn:
         sessao = await conn.fetchrow(
             "SELECT id, user_id FROM sessions "
             "WHERE id = $1 AND revogada_em IS NULL AND expira_em > now()",
-            uuid.UUID(sid),
+            sid_uuid,
         )
-        if sessao is None or str(sessao["user_id"]) != sub:
+
+        if sessao is None or sessao["user_id"] != sub_uuid:
             raise erro(401, "UNAUTHORIZED")
 
         user = await conn.fetchrow(
             "SELECT id, email, nome, regime, mes_abertura_mei, ano_abertura_mei, "
-            "telegram_chat_id, criado_em, atualizado_em FROM users WHERE id = $1",
-            uuid.UUID(sub),
+            "telegram_chat_id, criado_em, atualizado_em "
+            "FROM users WHERE id = $1",
+            sub_uuid,
         )
+
         if user is None:
             raise erro(401, "UNAUTHORIZED")
 
