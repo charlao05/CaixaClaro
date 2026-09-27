@@ -255,7 +255,20 @@ def avaliar_com_gates(dataset, *, schema):
 
 
 def _cli() -> int:
+    import argparse
+    import os
     import sys
+    from datetime import datetime, timezone
+
+    parser = argparse.ArgumentParser(prog="caixaclaro.eval.runner")
+    parser.add_argument(
+        "--publicar",
+        metavar="CAMINHO",
+        default=None,
+        help="Se dado e o eval passar, grava envelope JSON neste caminho.",
+    )
+    args = parser.parse_args()
+
     backend = Path(__file__).resolve().parents[3]
     golden = backend / "tests" / "golden"
 
@@ -274,7 +287,42 @@ def _cli() -> int:
 
     imprimir(m)
     print("PASS")
+
+    if args.publicar:
+        _publicar(
+            m,
+            Path(args.publicar),
+            executado_em=datetime.now(timezone.utc).isoformat(),
+        )
+
     return 0
+
+
+def _publicar(m, destino: Path, *, executado_em: str) -> None:
+    """Grava envelope de M9.3_DECISAO em disco. Chamado apenas em PASS.
+
+    Em FAIL nao ha publicacao: 'ultima execucao' aqui significa
+    'ultima execucao bem-sucedida'.
+    """
+    import json
+    import os
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    envelope = {
+        "executado_em": executado_em,
+        "commit": os.environ.get("GITHUB_SHA", "local"),
+        "taxonomia_version": TAXONOMIA_VERSION,
+        "total": m.total,
+        "avaliaveis": m.avaliaveis,
+        "abstratidos": m.abstratidos,
+        "metricas": {"A": m.A, "B": round(m.B, 3), "C": round(m.C, 3), "D": m.D},
+        "por_dificuldade": m.por_dificuldade,
+        "resultado": "PASS",
+    }
+    destino.write_text(
+        json.dumps(envelope, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
