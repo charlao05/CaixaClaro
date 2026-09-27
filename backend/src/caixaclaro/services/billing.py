@@ -278,7 +278,7 @@ async def _conceder_periodo(conn, user_id, plano, periodo_dias, payment_id):
             INSERT INTO subscriptions
               (user_id, plano, status, periodo_inicio, periodo_fim)
             VALUES ($1, $2, 'ativa', now(),
-                    now() + ($3 || ' days')::interval)
+                    now() + make_interval(days => $3))
             """,
             user_id,
             plano,
@@ -291,7 +291,7 @@ async def _conceder_periodo(conn, user_id, plano, periodo_dias, payment_id):
                SET plano = $1,
                    status = 'ativa',
                    periodo_fim = GREATEST(now(), periodo_fim)
-                                 + ($2 || ' days')::interval,
+                                 + make_interval(days => $2),
                    atualizado_em = now()
              WHERE id = $3
             """,
@@ -432,3 +432,6 @@ async def processar_webhook_asaas(conn, payload: dict) -> dict:
         meta={"event": event},
     )
     return {"ok": True, "ignorado": event}
+
+
+
