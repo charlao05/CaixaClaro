@@ -15,7 +15,7 @@ Estado JSONB esperado em fiscal_state.estado:
       "ultima_avaliacao_em": "2026-09-27T..."
     }
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
@@ -99,6 +99,7 @@ class FaturamentoResultado:
     depois: Decimal
     ano_referencia: int
     faixas: tuple[tuple[str, str, str], ...]
+    alertas_criados: tuple[tuple[str, str, str], ...] = ()
 
 
 def calcular_delta(
@@ -136,7 +137,11 @@ def calcular_delta(
 async def atualizar_fiscal_state(
     conn, user_id, delta: Decimal, quando: date
 ) -> FaturamentoResultado:
-    """Aplica delta em fiscal_state + emite alertas §10. Lock FOR UPDATE."""
+    """Aplica delta em fiscal_state + emite alertas §10. Lock FOR UPDATE.
+
+    Retorna alertas_criados: apenas os que foram efetivamente inseridos
+    (ON CONFLICT DO NOTHING suprime duplicatas sem eco).
+    """
     if delta == 0:
         row = await conn.fetchrow(
             "SELECT estado FROM fiscal_state WHERE user_id = $1", user_id
@@ -170,16 +175,20 @@ async def atualizar_fiscal_state(
     )
 
     prazo = prazo_do_ano(quando)
+    alertas_criados: list[tuple[str, str, str]] = []
     for slug, sev, msg in resultado.faixas:
-        await conn.execute(
+        row = await conn.fetchval(
             """
             INSERT INTO alerts
               (user_id, tipo, banda_ou_slug, prazo, severidade, mensagem)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, tipo, banda_ou_slug, prazo)
               DO NOTHING
+            RETURNING id
             """,
             user_id, TIPO_ALERTA, slug, prazo, sev, msg,
         )
+        if row is not None:
+            alertas_criados.append((slug, sev, msg))
 
-    return resultado
+    return replace(resultado, alertas_criados=tuple(alertas_criados))
