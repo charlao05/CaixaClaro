@@ -206,11 +206,11 @@ CONTRATOS_INTERNOS §2). NUNCA CPF em claro.
 
 #### 6.3 — Ponte PF ↔ PJ (titular/sócio)
     regra_acionada = "ponte_pf_pj"
-    Se padrão textual ("retirada titular", "distribuicao lucros", e categoria ∈ {"transferencia_propria",
-      "pessoal_prolabore"}: reclassifica (1º caso)
-      ou confirma (2º caso). Em ambos regra_acionada =
-      "ponte_pf_pj" e a triagem §7.2 exige confirmação.
-    para "pessoal_prolabore".
+    Se padrão textual ("retirada titular", "distribuicao lucros",
+    "pro labore") e categoria ∈ {"transferencia_propria",
+    "pessoal_prolabore"}: reclassifica (1º caso) ou apenas
+    confirma (2º caso). Em ambos regra_acionada = "ponte_pf_pj"
+    e a triagem §7.2 exige confirmação.
 
 #### 6.4 — CPF próprio => transferência própria
     regra_acionada = "cpf_proprio"
