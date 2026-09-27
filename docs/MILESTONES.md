@@ -27,15 +27,32 @@ Critérios:
   - [ ] Rate limit de login comprovado
   - [ ] Auditoria de tentativa falha
 
-## M3 — Ingestão
+## M3a — Ingestão pura
+
+Origem: M3 original foi repartido em M3a e M3b. O critério original
+"POST /transacoes/extrato/colar retorna classificação" era erro do plano:
+misturava ingestão com classificação. Classificação é M4.
+
 Critérios:
-  - [ ] POST /transacoes/extrato/colar retorna classificação
-  - [ ] Parsers CSV/OFX convergem para o mesmo formato
-  - [ ] POST /contas/conectar retorna connect token Pluggy
+  - [ ] POST /transacoes/extrato/colar parseia e persiste (sem classificar)
+  - [ ] POST /transacoes/importar aceita CSV e OFX, convergindo para o mesmo formato
+  - [ ] GET /transacoes com paginação por cursor (data DESC, id DESC)
+  - [ ] Idempotency-Key obrigatório em ambos os POSTs
+  - [ ] valor é string decimal na API; JSON number retorna 422
+  - [ ] line_index 0-based pós-parser
+  - [ ] needs_review = NULL em toda transação de M3a
+  - [ ] Isolamento por usuário garantido
+  - [ ] Bateria de M3a passando (12 critérios de docs/M3a_CONTRATO.md §7)
+
+## M3b — Pluggy
+
+Depende de credencial externa (trial Pluggy).
+
+Critérios:
+  - [ ] POST /contas/conectar retorna connect token
   - [ ] Webhook item/created fecha ciclo (consent + accounts + transactions)
   - [ ] Bateria C (H2 clientUserId) executada
   - [ ] sync_requests segue claim persistente
-
 ## M4 — Inteligência fiscal
 Critérios:
   - [ ] Classificação roda no servidor

@@ -58,3 +58,81 @@ Fonte não verificada é exibida como pendente e não sustenta garantia ou penal
 
 ## 2026-09-26 — Critério de parada
 Milestone só reabre por (a) contradição, (b) impossibilidade técnica, (c) afirmação externa não verificada ou (d) risco de perda de dado/dinheiro.
+
+## 2026-09-26 — M3 repartido em M3a (ingestão) e M3b (Pluggy)
+
+**Decisão:** M3a entrega ingestão pura (colar, CSV, OFX, persistência,
+Decimal, paginação) sem classificação. M3b entrega Pluggy (connect token,
+webhook item/created, sync_requests).
+
+**Motivo:** o critério original "POST /transacoes/extrato/colar retorna
+classificação" misturava M3 e M4. Além disso, M3b depende de credencial
+externa (trial Pluggy) e não pode ser fechado por bateria local.
+
+**Consequência:** `MILESTONES.md` deixa de ter M3 como bloco único.
+Classificação fica inteiramente em M4.
+
+## 2026-09-26 — line_index 0-based pós-parser
+
+**Decisão:** `line_index` é a posição do registro após o parsing, começando em 0.
+
+**Motivo:** precisa ser determinístico sobre a mesma entrada. "Linha física"
+acopla a identidade ao formato (cabeçalho, linhas em branco, quebras CRLF/LF).
+
+**Consequência:** CSV e OFX convergem para a mesma numeração quando os
+dados são os mesmos.
+
+## 2026-09-26 — import_id é UUID novo por upload
+
+**Decisão:** cada requisição a `POST /transacoes/importar` gera um novo
+`import_id` (UUID v4).
+
+**Motivo:** previsível. Reenvio explícito do mesmo arquivo pelo usuário é
+decisão dele; retry acidental de HTTP é responsabilidade do Idempotency-Key.
+
+**Consequência:** combinar com Idempotency-Key obrigatório; sem ele, retry
+duplicaria tudo.
+
+## 2026-09-26 — needs_review com três estados
+
+**Decisão:** `needs_review` é BOOLEAN nullable.
+  NULL  → ainda não classificada (M3a)
+  false → classificada, sem revisão pendente (M4)
+  true  → classificada, com revisão pendente (M4)
+
+**Motivo:** separa ingestão (M3a) de inteligência fiscal (M4) sem
+forçar um valor falso durante a ingestão.
+
+**Consequência:** M3a nunca escreve true nem false.
+
+## 2026-09-26 — Idempotency-Key obrigatório em ingestão
+
+**Decisão:** `POST /transacoes/extrato/colar` e `POST /transacoes/importar`
+exigem header Idempotency-Key (UUID v4).
+
+**Motivo:** com import_id novo por upload, retry de HTTP duplicaria.
+Idempotency-Key protege o HTTP; UNIQUE da transação protege o negócio.
+São proteções distintas e complementares.
+
+**Consequência:** payload_hash é calculado sobre o **corpo efetivo da
+requisição**, antes de qualquer UUID gerado pelo servidor.
+
+## 2026-09-26 — valor é string decimal na API
+
+**Decisão:** `valor` entra e sai da API como string decimal ("1234.56").
+JSON number e notação científica são rejeitados com 422.
+
+**Motivo:** JSON number não preserva semântica decimal.
+
+**Consequência:** o parser interno pode aceitar formatos bancários, mas a
+fronteira HTTP é estrita.
+
+## 2026-09-26 — Normalização de identidade mora em CONTRATOS_INTERNOS §16
+
+**Decisão:** o algoritmo de normalização usado para `paste_id` é §16 de
+CONTRATOS_INTERNOS. `specs/textnorm.md` nunca existiu em commit e não será
+criado.
+
+**Motivo:** é contrato interno curto; não justifica pasta `specs/`.
+
+**Consequência:** `ESTRUTURA.md` deixa de listar `specs/textnorm.md`.

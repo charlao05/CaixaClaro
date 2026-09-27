@@ -42,6 +42,8 @@ async def limpar_estado(client):
     rate_limit.resetar_tudo()
 
     async with conexao() as conn:
+        await conn.execute("DELETE FROM idempotency_keys")
+        await conn.execute("DELETE FROM transactions")
         await conn.execute("DELETE FROM audit_log")
         await conn.execute("DELETE FROM sessions")
         await conn.execute("DELETE FROM users")

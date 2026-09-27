@@ -19,7 +19,6 @@ Estrutura-alvo:
 │   ├── guardrails.md
 │   ├── tax_opinions.md
 │   ├── taxonomia.md
-│   └── textnorm.md
 ├── backend/
 ├── frontend/
 ├── tests/
@@ -27,7 +26,7 @@ Estrutura-alvo:
 │       └── dataset_v1.json
 └── .github/workflows/
 
-M0 cria somente documentação. specs/ e tests/golden/ são estrutura-alvo, não arquivos implementados em M0.
+M0 cria somente documentação. specs/ e tests/golden/ são estrutura-alvo, não arquivos implementados em M0. textnorm não vive em specs/: o contrato de normalização está em docs/CONTRATOS_INTERNOS.md §16.
 
 Backend: Python/FastAPI, com API, domínio, persistência, integrações e workers separáveis.
 Frontend: React, consumidor da API.

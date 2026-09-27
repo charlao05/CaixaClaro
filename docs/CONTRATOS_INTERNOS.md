@@ -182,7 +182,7 @@ ErroAPI:
 
 Códigos: UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMIT,
 VALIDATION_ERROR, UPSTREAM_INDISPONIVEL, IDEMPOTENCY_KEY_REUSED,
-IDEMPOTENCY_EM_ANDAMENTO, CONFLITO_VERSAO.
+IDEMPOTENCY_EM_ANDAMENTO, CONFLITO_VERSAO, CURSOR_INVALIDO.
 
 ---
 
@@ -333,3 +333,33 @@ Job diário conta no audit_log:
 
 Se > 5 em 7 dias: alerta operacional.
 Motivo: jobs de expiração/reconciliação desalinhados com o Asaas real.
+
+---
+
+## 16. Normalização para identidade do paste
+
+Aplica-se somente ao cálculo de `paste_id`. Não gera coluna adicional.
+Não define normalização de `descricao_bruta`.
+
+Algoritmo determinístico:
+
+    1.  Entrada é string Unicode.
+    2.  Normalizar Unicode com NFKD.
+    3.  Remover marcas combinantes (acentos).
+    4.  Converter para lowercase.
+    5.  Normalizar quebras de linha: CRLF e CR -> LF.
+    6.  Colapsar qualquer sequência de whitespace em um único espaço.
+    7.  Strip nas extremidades.
+    8.  Codificar o resultado em UTF-8.
+    9.  SHA-256 do resultado.
+    10. Usar os primeiros 16 caracteres hexadecimais do digest como paste_id.
+
+Notas:
+
+- O passo 5 é logicamente absorvido pelo passo 6 (todas as quebras de
+  linha são whitespace). Mantido por clareza de intenção.
+- Não removemos pontuação, símbolos ou caracteres não alfanuméricos.
+  Se um dia isso for necessário, é decisão explícita — não está
+  autorizado por este contrato.
+- Exemplo: "  PIX  João\r\n" e "PIX JOÃO" produzem ambos "pix joao" e,
+  portanto, o mesmo paste_id.
