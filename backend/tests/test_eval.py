@@ -77,3 +77,29 @@ def test_metrica_D_zero_erros_criticos():
     m = avaliar(carregar_dataset(GOLDEN))
     if m.D != 0: imprimir(m)
     assert m.D == 0
+
+
+def test_avaliar_recusa_dataset_pequeno():
+    """§18.11: recusa execucao se amostra < 15."""
+    import pytest
+    from caixaclaro.eval.runner import avaliar, DATASET_MIN
+    casos = [
+        {"id": f"x{i:03d}", "descricao": "PIX RECEBIDO", "valor": "1.00",
+         "categoria_esperada": "outros", "difficulty": "easy"}
+        for i in range(DATASET_MIN - 1)
+    ]
+    with pytest.raises(ValueError):
+        avaliar(casos)
+
+
+def test_avaliar_aceita_dataset_no_minimo():
+    """Contraprova: exatamente DATASET_MIN casos passa pelo gate."""
+    from caixaclaro.eval.runner import avaliar, DATASET_MIN
+    casos = [
+        {"id": f"y{i:03d}", "descricao": "PAGTO GUIA DAS SIMPLES",
+         "valor": "1.00", "categoria_esperada": "imposto_das",
+         "difficulty": "easy"}
+        for i in range(DATASET_MIN)
+    ]
+    m = avaliar(casos)  # nao levanta
+    assert m.total == DATASET_MIN
