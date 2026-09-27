@@ -87,8 +87,8 @@ class Metricas:
 
     @property
     def A(self) -> int:
-        """Conjunto A (§13) — casos classificados: needs_review=False."""
-        return self.avaliaveis
+        """Métrica A (§13) — violações NUNCA. Gate: == 0."""
+        return self.violacoes
 
     @property
     def B(self) -> float:
@@ -193,7 +193,7 @@ def imprimir(m):
               f"{'E' if c.erro_critico else '.':4}")
     print()
     print(f"total={m.total} |A|={m.avaliaveis} abstratidos={m.abstratidos}")
-    print(f"Metrica A (violacoes NUNCA) = {m.violacoes} (esperado 0)")
+    print(f"Metrica A (violacoes NUNCA) = {m.A} (esperado 0)")
     print(f"B acuracia                  = {m.B:.3f} (esperado >= 0.850)")
     print(f"C abstencao                 = {m.C:.3f} (esperado 0.10..0.25)")
     print(f"D erros criticos            = {m.D} (esperado 0)")
