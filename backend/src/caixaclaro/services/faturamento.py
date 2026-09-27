@@ -35,6 +35,23 @@ FAIXAS: tuple[tuple[Decimal, str, str], ...] = (
 TIPO_ALERTA = "faturamento_faixa"
 
 
+def _calcular_banda(faturamento: Decimal) -> str | None:
+    """Retorna o slug da maior faixa atingida, ou None se abaixo de 60%.
+
+    Independe de direcao: subir ou descer, a banda e sempre a do valor
+    atual. Alertas §10 continuam monotonico-crescentes — so cruzar
+    para cima emite; a descida apenas recalcula esta banda.
+    """
+    if faturamento <= 0:
+        return None
+    pct = faturamento / TETO_MEI_ANUAL
+    banda: str | None = None
+    for p, slug, _ in FAIXAS:
+        if pct >= p:
+            banda = slug
+    return banda
+
+
 def _load_estado(raw) -> dict:
     """asyncpg devolve JSONB como str por padrao; normaliza para dict."""
     if raw is None:
@@ -104,8 +121,9 @@ def calcular_delta(
     estado["ultima_avaliacao_em"] = datetime.now(timezone.utc).isoformat()
 
     faixas = tuple(faixa_cruzada(antes, depois))
-    if faixas:
-        estado["banda_atual"] = faixas[-1][0]
+    # Recalcula banda_atual SEMPRE — descida tambem precisa refletir.
+    # Alertas §10 seguem monotonico-crescentes (so faixa_cruzada emite).
+    estado["banda_atual"] = _calcular_banda(depois)
 
     return estado, FaturamentoResultado(
         antes=antes,

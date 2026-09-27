@@ -24,6 +24,7 @@ from ..services.faturamento import (
     conta_faturamento,
 )
 from ..services.fiscal import processar_lancamento
+from ..services.fila import confirmar as confirmar_tx, listar_fila
 
 router = APIRouter()
 
@@ -95,10 +96,11 @@ async def _operacao_colar(conn, user_id: str, texto: str):
             INSERT INTO transactions
               (user_id, origem, paste_id, line_index, data,
                descricao_bruta, valor,
-               categoria, proposito, patrimonio, tratamento_tributario,
+               categoria, categoria_original,
+               proposito, patrimonio, tratamento_tributario,
                confianca, needs_review, via, motivo)
             VALUES ($1, 'paste', $2, $3, $4, $5, $6,
-                    $7, $8, $9, $10, $11, $12, $13, $14)
+                    $7, $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
@@ -320,3 +322,133 @@ async def listar(
         "next_cursor": next_cursor,
         "has_more": has_more,
     }
+
+# ============================================================
+# GET /transacoes/fila — M5A
+# ============================================================
+
+def _serializar_fila(r) -> dict:
+    return {
+        "id": str(r["id"]),
+        "data": r["data"].isoformat(),
+        "descricao_bruta": r["descricao_bruta"],
+        "valor": str(r["valor"]),
+        "origem": r["origem"],
+        "categoria": r["categoria"],
+        "categoria_original": r["categoria_original"],
+        "proposito": r["proposito"],
+        "patrimonio": r["patrimonio"],
+        "tratamento_tributario": r["tratamento_tributario"],
+        "confianca": float(r["confianca"]) if r["confianca"] is not None else None,
+        "needs_review": r["needs_review"],
+        "via": r["via"],
+        "motivo": r["motivo"],
+        "criado_em": r["criado_em"].isoformat(),
+        "atualizado_em": r["atualizado_em"].isoformat(),
+        "versao": r["versao"],
+    }
+
+
+@router.get("/fila")
+async def fila(
+    request: Request,
+    limite: int = Query(50, ge=1, le=200),
+    u: dict = Depends(usuario),
+):
+    async with conexao() as conn:
+        rows = await listar_fila(
+            conn, _uuid.UUID(str(u["id"])), limite=limite
+        )
+    return {"itens": [_serializar_fila(r) for r in rows]}
+
+
+# ============================================================
+# PATCH /transacoes/{id}/confirmar — M5A
+# ============================================================
+
+class ConfirmarIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    categoria: str | None = None
+
+
+@router.patch("/{tx_id}/confirmar")
+async def confirmar_endpoint(
+    tx_id: str,
+    dados: ConfirmarIn,
+    request: Request,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    u: dict = Depends(usuario),
+):
+    async def op(conn):
+        return await _operacao_confirmar(
+            conn, str(u["id"]), tx_id, dados.categoria
+        )
+
+    resposta, status_http = await executar_com_idempotencia(
+        user_id=str(u["id"]),
+        rota=f"PATCH /api/v1/transacoes/{tx_id}/confirmar",
+        chave=idempotency_key,
+        body={"tx_id": tx_id, **dados.model_dump()},
+        operacao=op,
+    )
+    return JSONResponse(content=resposta, status_code=status_http)
+
+
+async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova):
+    try:
+        tx_uuid = _uuid.UUID(tx_id)
+    except ValueError:
+        raise erro(400, "ID_INVALIDO", "ID da transacao invalido")
+
+    resultado, motivo = await confirmar_tx(
+        conn, _uuid.UUID(user_id), tx_uuid, categoria_nova, user_id
+    )
+
+    if resultado is None:
+        if motivo == "nao_encontrada":
+            raise erro(404, "TX_NAO_ENCONTRADA", "Transacao nao encontrada")
+        if motivo == "ja_confirmada":
+            raise erro(409, "JA_CONFIRMADA", "Transacao ja foi confirmada")
+        if motivo == "nao_esta_em_revisao":
+            raise erro(
+                409, "NAO_EM_REVISAO",
+                "Transacao nao esta em fila de revisao",
+            )
+        if motivo == "categoria_invalida":
+            raise erro(
+                400, "CATEGORIA_INVALIDA",
+                f"Categoria desconhecida: {categoria_nova}",
+            )
+        raise erro(500, "ERRO_INTERNO", "Motivo desconhecido")
+
+    # Retroatividade: se a categoria mudou e afeta §9, atualiza fiscal_state.
+    if resultado.delta_faturamento != 0:
+        data_tx = await conn.fetchval(
+            "SELECT data FROM transactions WHERE id = $1", tx_uuid
+        )
+        await atualizar_fiscal_state(
+            conn, _uuid.UUID(user_id), resultado.delta_faturamento, data_tx
+        )
+
+    # Auditoria
+    await registrar_auditoria(
+        conn,
+        ator="usuario",
+        acao="transacao_confirmada",
+        user_id=user_id,
+        meta={
+            "tx_id": tx_id,
+            "categoria_antiga": resultado.categoria_antiga,
+            "categoria_nova": resultado.categoria_nova,
+            "delta_faturamento": str(resultado.delta_faturamento),
+        },
+    )
+
+    return {
+        "tx_id": resultado.tx_id,
+        "categoria_antiga": resultado.categoria_antiga,
+        "categoria_nova": resultado.categoria_nova,
+        "delta_faturamento": str(resultado.delta_faturamento),
+        "categoria_mudou": resultado.categoria_mudou,
+    }, 200
+
