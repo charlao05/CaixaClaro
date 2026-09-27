@@ -411,9 +411,9 @@ async def test_operacao_que_falha_marca_falhou(client):
     assert status == "falhou"
 
 
-async def test_retry_apos_falhou_reprocessa(client):
-    """Chave em 'falhou' permite nova tentativa."""
-    token = await _registrar(client, "reproc@x.com", "666.666.666-66")
+async def test_retry_apos_falhou_mesmo_payload_reprocessa(client):
+    """Chave em 'falhou' permite nova tentativa com o MESMO payload."""
+    token = await _registrar(client, "reproc2@x.com", "999.999.999-99")
     chave = _key()
     headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": chave}
 
@@ -422,18 +422,14 @@ async def test_retry_apos_falhou_reprocessa(client):
         headers=headers, json={"texto": "nada"},
     )
     assert r1.status_code == 400
+    assert r1.json()["erro"] == "EXTRATO_ILEGIVEL"
 
-    # Mesma chave, payload diferente — mas chave estava em 'falhou'
-    # Então o fluxo permite reprocessar. Mudamos payload para um válido.
     r2 = await client.post(
         "/api/v1/transacoes/extrato/colar",
-        headers=headers, json={"texto": TXT_5},
+        headers=headers, json={"texto": "nada"},
     )
-    # Comportamento esperado: 409 IDEMPOTENCY_KEY_REUSED porque payload mudou.
-    # (Só permite reprocessar com o MESMO payload)
-    assert r2.status_code == 409
-    assert r2.json()["erro"] == "IDEMPOTENCY_KEY_REUSED"
-
+    assert r2.status_code == 400
+    assert r2.json()["erro"] == "EXTRATO_ILEGIVEL"
 
 async def test_atomicidade_concluido_dentro_da_transacao(client):
     """Após sucesso, 'concluido' está persistido — sem janela."""
@@ -513,3 +509,27 @@ async def test_concluido_com_response_persistida(client):
     assert row["status"] == "concluido"
     assert row["status_http"] == 201
     assert row["response"] is not None
+
+
+async def test_replay_devolve_resposta_semanticamente_identica(client):
+    """Segunda chamada com mesma chave + mesmo payload devolve JSON
+    semanticamente idêntico. Não compara bytes porque JSONB reordena
+    chaves — a ordem não é contrato.
+    """
+    token = await _registrar(client, "replay@x.com", "888.888.888-88")
+    chave = _key()
+    headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": chave}
+
+    r1 = await client.post(
+        "/api/v1/transacoes/extrato/colar",
+        headers=headers, json={"texto": TXT_5},
+    )
+    r2 = await client.post(
+        "/api/v1/transacoes/extrato/colar",
+        headers=headers, json={"texto": TXT_5},
+    )
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    assert r1.json() == r2.json()
+    assert "paste_id" in r1.json()
+    assert r1.json()["paste_id"] == r2.json()["paste_id"]

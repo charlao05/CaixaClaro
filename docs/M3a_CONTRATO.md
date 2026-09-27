@@ -206,3 +206,42 @@ Status: REMOVIDO.
 Nenhum endpoint de M3a recebe "valor" diretamente. A regra de
 valor-como-string-decimal continua válida como princípio, mas será
 testada quando houver endpoint que receba "valor" (M4).
+
+## 9. Dívida de evidência (registrada em 2026-09-26)
+
+M3a recebeu PASS* em `1c8760a`. A bateria executada foi 76/76.
+As lacunas abaixo não foram provadas antes do commit e ficam
+registradas como dívida — não como resolvidas.
+
+### D1 — Retry com mesmo payload após falhou
+`test_mesma_chave_payload_diferente_apos_falhou_409` prova que
+payload diferente após 'falhou' retorna 409. Não prova que
+payload IDÊNTICO após 'falhou' reprocessa com sucesso.
+
+### D2 — Header Retry-After
+`test_processando_recente_bloqueia` verifica status 409 e código
+IDEMPOTENCY_EM_ANDAMENTO. Não asserta presença nem valor do
+header Retry-After.
+
+### D3 — Replay byte-a-byte
+`test_colar_mesma_chave_mesmo_payload_reaproveita_resposta` compara
+r1.json() == r2.json(). Não compara r1.content == r2.content, o que
+provaria serialização idêntica incluindo ordem de campos e whitespace.
+
+### D4 — Concorrência real
+Nenhum teste dispara duas requisições simultâneas com a mesma
+Idempotency-Key. A garantia estrutural (UNIQUE + ON CONFLICT) é
+assumida; não é medida.
+
+### D5 — Atomicidade sob crash
+`test_atomicidade_concluido_dentro_da_transacao` verifica o estado
+final (concluido + response + status_http). Não simula queda de
+processo entre o COMMIT da operação e o UPDATE da chave.
+
+### Regra aplicada
+Nenhuma dessas lacunas reabre M3a nem altera 1c8760a. Elas entram
+como dívida de evidência a ser quitada quando houver gatilho:
+- D1/D2 quando houver cliente com retry automatizado em produção.
+- D3 quando houver cliente que dependa de canonicalização da resposta.
+- D4 quando houver mais de uma instância do backend.
+- D5 quando o mecanismo de idempotência for reutilizado por billing (M5).
