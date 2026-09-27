@@ -46,8 +46,8 @@ def test_cada_regra_nunca_tem_ao_menos_um_caso():
 
 def test_metrica_A_zero_violacoes():
     m = avaliar(carregar_dataset(GOLDEN))
-    if m.A != 0: imprimir(m)
-    assert m.A == 0
+    if m.violacoes != 0: imprimir(m)
+    assert m.violacoes == 0
 
 
 def test_metrica_B_acuracia_minima():

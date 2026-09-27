@@ -10,6 +10,12 @@ from caixaclaro.eval.runner import (
 )
 
 SCHEMA = Path(__file__).parent / "golden" / "schema.json"
+SCHEMA_OBJ = carregar_schema(SCHEMA)
+
+
+def _gate(casos, **kw):
+    """Atalho: avaliar_com_gates com schema padrao."""
+    return avaliar_com_gates(casos, schema=SCHEMA_OBJ, **kw)
 
 
 def _caso(i, desc, cat, diff="easy", esp=None):
@@ -51,7 +57,7 @@ def test_gate_valida_schema():
 def test_gate_verifica_taxonomia(monkeypatch):
     monkeypatch.setattr(r, "taxonomia_ok", lambda: False)
     with pytest.raises(GateError, match="TAXONOMIA_VERSION"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_recusa_avaliaveis_insuficientes():
@@ -59,13 +65,13 @@ def test_gate_recusa_avaliaveis_insuficientes():
     for i in range(6):
         casos[i] = _caso(i, "PIX RECEBIDO JOAO", "outros", diff="hard")
     with pytest.raises(GateError, match="avaliaveis"):
-        avaliar_com_gates(casos)
+        _gate(casos)
 
 
 def test_gate_A_positivo(monkeypatch):
     monkeypatch.setattr(r, "avaliar", lambda c: _metricas(violacoes=1))
     with pytest.raises(GateError, match="Metrica A"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_B_abaixo_de_085(monkeypatch):
@@ -74,7 +80,7 @@ def test_gate_B_abaixo_de_085(monkeypatch):
         lambda c: _metricas(acertos_avaliaveis=15, avaliaveis=20),
     )
     with pytest.raises(GateError, match="Metrica B"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_C_abaixo_da_faixa(monkeypatch):
@@ -82,7 +88,7 @@ def test_gate_C_abaixo_da_faixa(monkeypatch):
         r, "avaliar", lambda c: _metricas(abstratidos=0, total=20),
     )
     with pytest.raises(GateError, match="Metrica C"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_C_acima_da_faixa(monkeypatch):
@@ -90,7 +96,7 @@ def test_gate_C_acima_da_faixa(monkeypatch):
         r, "avaliar", lambda c: _metricas(abstratidos=10, total=20),
     )
     with pytest.raises(GateError, match="Metrica C"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_abstencao_em_easy(monkeypatch):
@@ -105,7 +111,7 @@ def test_gate_abstencao_em_easy(monkeypatch):
         ),
     )
     with pytest.raises(GateError, match="abstencao em easy"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_abstencao_em_medium(monkeypatch):
@@ -121,7 +127,7 @@ def test_gate_abstencao_em_medium(monkeypatch):
         ),
     )
     with pytest.raises(GateError, match="abstencao em medium"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_gate_D_positivo(monkeypatch):
@@ -140,7 +146,7 @@ def test_gate_D_positivo(monkeypatch):
         ),
     )
     with pytest.raises(GateError, match="Metrica D"):
-        r.avaliar_com_gates(_dataset_minimo())
+        _gate(_dataset_minimo())
 
 
 def test_conjunto_critico_contem_pares_do_contrato():
