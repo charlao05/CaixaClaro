@@ -19,7 +19,7 @@ SCHEMA_OBJ = carregar_schema(SCHEMA)
 
 def _caso(i, desc, cat, diff="easy", esp=None):
     return {
-        "id": f"t{i:03d}",
+        "id": f"g{i:03d}",
         "descricao": desc,
         "valor": "100.00",
         "categoria_esperada": esp or cat,
