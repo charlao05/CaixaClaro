@@ -321,3 +321,93 @@ async def test_checkout_corrida_dois_workers_apenas_um_post(client, monkeypatch)
             "SELECT claimed_at FROM payments WHERE user_id = $1", uid
         )
     assert claim is None
+
+
+# ----------------------------------------------------------------
+# M5 — integração HTTP dos endpoints de billing
+# ----------------------------------------------------------------
+
+async def test_http_checkout_com_idempotency_key(client, monkeypatch):
+    await _criar_usuario(client, "http-billing@x.com", "313.313.313-13")
+    _mock_asaas(monkeypatch)
+
+    # Registrar e obter token pelo padrão existente.
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "http-billing@x.com", "senha": "senha123"},
+    )
+    assert r.status_code == 200, r.json()
+    token = r.json()["token"]
+
+    chave = str(uuid.uuid4())
+    r = await client.post(
+        "/api/v1/billing/checkout",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": chave,
+        },
+        json={"plano": "pro_mensal"},
+    )
+
+    assert r.status_code == 202, r.json()
+    body = r.json()
+    assert body["status"] == "pendente"
+    assert body["pix_qr_code"] == "base64img"
+    assert body["pix_copy_paste"] == "000201..."
+
+
+async def test_http_checkout_mesma_chave_retorna_mesma_resposta(
+    client, monkeypatch
+):
+    await _criar_usuario(client, "http-idem@x.com", "314.314.314-14")
+    chamadas = _mock_asaas(monkeypatch)
+
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "http-idem@x.com", "senha": "senha123"},
+    )
+    assert r.status_code == 200, r.json()
+    token = r.json()["token"]
+
+    chave = str(uuid.uuid4())
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": chave,
+    }
+
+    r1 = await client.post(
+        "/api/v1/billing/checkout",
+        headers=headers,
+        json={"plano": "pro_mensal"},
+    )
+    r2 = await client.post(
+        "/api/v1/billing/checkout",
+        headers=headers,
+        json={"plano": "pro_mensal"},
+    )
+
+    assert r1.status_code == 202, r1.json()
+    assert r2.status_code == 202, r2.json()
+    assert r2.json() == r1.json()
+
+    # Segunda chamada não toca novamente o Asaas.
+    assert len(chamadas["criar_pagamento"]) == 1
+
+
+async def test_http_checkout_sem_idempotency_key_422(client):
+    await _criar_usuario(client, "http-sem-key@x.com", "315.315.315-15")
+
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "http-sem-key@x.com", "senha": "senha123"},
+    )
+    assert r.status_code == 200, r.json()
+    token = r.json()["token"]
+
+    r = await client.post(
+        "/api/v1/billing/checkout",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"plano": "pro_mensal"},
+    )
+
+    assert r.status_code == 422
