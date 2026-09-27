@@ -28,6 +28,7 @@ from ..services.faturamento import (
     atualizar_fiscal_state,
     conta_faturamento,
 )
+from ..services.notificacoes import enviar_alertas_telegram
 from ..services.fiscal import processar_lancamento
 from ..services.tax_opinion import generate_tax_opinion
 from ..services.fiscal_resumo import resumo as resumo_fiscal
@@ -78,7 +79,7 @@ def _serializar_completa(r) -> dict:
 # POST /extrato/colar
 # ============================================================
 
-async def _operacao_colar(conn, user_id: str, texto: str):
+async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list):
     try:
         lancamentos = parse_texto(texto)
     except ExtratoIlegivel as e:
@@ -127,9 +128,10 @@ async def _operacao_colar(conn, user_id: str, texto: str):
                     data_mais_recente = l.data
 
     if delta_faturamento > 0 and data_mais_recente is not None:
-        await atualizar_fiscal_state(
+        res = await atualizar_fiscal_state(
             conn, uid, delta_faturamento, data_mais_recente
         )
+        alertas_out.extend(res.alertas_criados)
 
     rows = await conn.fetch(
         """
@@ -164,8 +166,12 @@ async def colar(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     u: dict = Depends(usuario),
 ):
+    alertas_para_enviar: list = []
+
     async def op(conn):
-        return await _operacao_colar(conn, str(u["id"]), dados.texto)
+        return await _operacao_colar(
+            conn, str(u["id"]), dados.texto, alertas_para_enviar
+        )
 
     resposta, status_http = await executar_com_idempotencia(
         user_id=str(u["id"]),
@@ -174,6 +180,7 @@ async def colar(
         body=dados.model_dump(),
         operacao=op,
     )
+    await enviar_alertas_telegram(u["id"], alertas_para_enviar)
     return JSONResponse(content=resposta, status_code=status_http)
 
 
@@ -400,9 +407,11 @@ async def confirmar_endpoint(
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     u: dict = Depends(usuario),
 ):
+    alertas_para_enviar: list = []
+
     async def op(conn):
         return await _operacao_confirmar(
-            conn, str(u["id"]), tx_id, dados.categoria
+            conn, str(u["id"]), tx_id, dados.categoria, alertas_para_enviar
         )
 
     resposta, status_http = await executar_com_idempotencia(
@@ -412,10 +421,11 @@ async def confirmar_endpoint(
         body={"tx_id": tx_id, **dados.model_dump()},
         operacao=op,
     )
+    await enviar_alertas_telegram(u["id"], alertas_para_enviar)
     return JSONResponse(content=resposta, status_code=status_http)
 
 
-async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova):
+async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out):
     try:
         tx_uuid = _uuid.UUID(tx_id)
     except ValueError:
@@ -447,9 +457,10 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova):
         data_tx = await conn.fetchval(
             "SELECT data FROM transactions WHERE id = $1", tx_uuid
         )
-        await atualizar_fiscal_state(
+        res = await atualizar_fiscal_state(
             conn, _uuid.UUID(user_id), resultado.delta_faturamento, data_tx
         )
+        alertas_out.extend(res.alertas_criados)
 
     # Auditoria
     await registrar_auditoria(
