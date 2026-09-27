@@ -78,12 +78,12 @@ Colunas em transactions:
 ClassificacaoResultado:
   categoria: string
   proposito: string
-    # Valores validos (Literal em domain/fiscal/classificacao.py):
-    #   trabalho_servico | venda_produto | salario_formal
-    #   beneficio_inss | tributo_das | tarifa_bancaria | iof
-    #   gasto_negocio | gasto_pessoal | transferencia_interna
-    #   reembolso_operacional | emprestimo_recebido | emprestimo_concedido
-    #   retirada_titular | indeterminado
+    # Valores validos (Literal PropositoId em
+    # domain/fiscal/classificacao.py):
+    #   trabalho_servico | venda_produto | salario_aposentadoria
+    #   transferencia_propria | retirada_proprietario | emprestimo
+    #   devolucao_reembolso | gasto_negocio | gasto_pessoal
+    #   imposto_taxa | outros_indeterminado
     #
     # Este campo e contrato com o frontend: nao pode ser renomeado sem v2.
   origem_sugerida: string

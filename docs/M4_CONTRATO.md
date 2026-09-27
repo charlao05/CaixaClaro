@@ -329,18 +329,6 @@ Atualiza `faturamento_acumulado`:
     patrimonio == "atividade_negocio"
     AND categoria IN ("receita_servico", "receita_venda")
 
-  Retroatividade (M5A — decisão A): quando o usuário confirma
-  uma transação da fila e altera a categoria, o
-  `faturamento_acumulado` é ajustado pelo delta. Reclassificar
-  receita PJ para `outros` SUBTRAI o valor; reclassificar
-  `outros` para receita PJ ADICIONA. O campo deixa de ser
-  monotonicamente crescente.
-
-  Consequência em §10: alertas continuam monotonico-crescentes
-  — apenas cruzamentos para cima emitem alerta novo. Descidas
-  recalculam `banda_atual` mas não disparam alerta. Auditoria
-  em `audit_log` (ação `transacao_confirmada`).
-
     Na ingestão, a entrada de receita PJ adiciona seu valor.
 
     Na confirmação de uma transação da fila que altere a categoria,
