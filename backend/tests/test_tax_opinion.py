@@ -173,3 +173,78 @@ async def test_endpoint_opiniao_isolamento_404(client):
         headers={"Authorization": f"Bearer {token_b}"},
     )
     assert r.status_code == 404
+
+
+# ============================================================
+# N9 — opiniao le estado PERSISTIDO, nao recomputa
+# ============================================================
+
+async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
+    """Usuario cola PIX (cai em outros), confirma receita_servico,
+    GET /opiniao deve refletir a categoria confirmada — nao a inicial."""
+    token = await _registrar(client, email="n9@x.com", cpf="999.999.999-99")
+
+    r = await client.post(
+        "/api/v1/transacoes/extrato/colar",
+        headers={"Authorization": f"Bearer {token}",
+                 "Idempotency-Key": _key()},
+        json={"texto": "25/09 PIX RECEBIDO JOAO R$ 500,00"},
+    )
+    assert r.status_code == 201
+
+    # Pega o ID
+    fila = await client.get(
+        "/api/v1/transacoes/fila",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert fila.status_code == 200
+    tx_id = fila.json()["itens"][0]["id"]
+
+    # Confirma como receita_servico
+    r = await client.patch(
+        f"/api/v1/transacoes/{tx_id}/confirmar",
+        headers={"Authorization": f"Bearer {token}",
+                 "Idempotency-Key": _key()},
+        json={"categoria": "receita_servico"},
+    )
+    assert r.status_code == 200, r.json()
+
+    # GET /opiniao deve refletir receita_servico
+    r = await client.get(
+        f"/api/v1/transacoes/{tx_id}/opiniao",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.json()
+    body = r.json()
+    # A narrativa de fato cita "servico prestado"
+    assert "servico prestado" in body["fato"].lower()
+    # Nao caiu em duvida (usuario confirmou, mas confianca/via
+    # persistidos podem variar — apenas verifica que NAO e "outros")
+    assert "sem classificacao clara" not in body["fato"].lower()
+    # Confirmada = True
+    assert body["confirmada"] is True
+
+
+async def test_opiniao_pos_confirma_sem_idempotency(client):
+    """Prova que a leitura nao passa por recomputo — mesmo sem
+    Idempotency-Key, GET /opiniao funciona e reflete persistencia."""
+    token = await _registrar(client, email="n9b@x.com", cpf="101.101.101-10")
+
+    await client.post(
+        "/api/v1/transacoes/extrato/colar",
+        headers={"Authorization": f"Bearer {token}",
+                 "Idempotency-Key": _key()},
+        json={"texto": "25/09 CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA R$ 500,00"},
+    )
+    async with conexao() as conn:
+        tx_id = await conn.fetchval(
+            "SELECT id FROM transactions WHERE origem = 'paste'"
+        )
+
+    r = await client.get(
+        f"/api/v1/transacoes/{tx_id}/opiniao",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "servico prestado" in body["fato"].lower()

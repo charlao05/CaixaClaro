@@ -33,6 +33,9 @@ from ..services.tax_opinion import generate_tax_opinion
 from ..services.fiscal_resumo import resumo as resumo_fiscal
 from ..services.fila import confirmar as confirmar_tx, listar_fila
 
+from ..domain.fiscal.classificacao import ClassificacaoResultado
+from ..domain.fiscal.guardrails import GuardrailResultado
+from ..domain.fiscal.triagem import TriagemResultado
 router = APIRouter()
 
 
@@ -488,7 +491,9 @@ async def _operacao_opiniao(conn, user_id, tx_id):
 
     row = await conn.fetchrow(
         """
-        SELECT descricao_bruta, valor, confirmado_por
+        SELECT descricao_bruta, valor, categoria, categoria_original,
+               proposito, patrimonio, tratamento_tributario,
+               confianca, needs_review, via, confirmado_por
           FROM transactions
          WHERE id = $1 AND user_id = $2
         """,
@@ -498,10 +503,37 @@ async def _operacao_opiniao(conn, user_id, tx_id):
     if row is None:
         raise erro(404, "TX_NAO_ENCONTRADA", "Transacao nao encontrada")
 
-    ctx = ContextoClassificacao(personal_rules={})
-    classif = classificar_v2(row["descricao_bruta"], row["valor"], ctx)
-    guard = aplicar_guardrail(classif, descricao=row["descricao_bruta"])
-    tri = triar(classif, guard)
+    # §6: generate_tax_opinion(tx, classif, context) recebe classif
+    # como ENTRADA. Lemos o estado PERSISTIDO — nao recomputamos o
+    # pipeline. Recomputar mente quando o usuario confirma categoria
+    # diferente da proposta (M5A).
+    cat_atual = row["categoria"] or "outros"
+    classif = ClassificacaoResultado(
+        categoria=cat_atual,
+        proposito=row["proposito"] or "outros_indeterminado",
+        origem_sugerida="desconhecido",
+        patrimonio=row["patrimonio"] or "pessoa_fisica",
+        tratamento_tributario=row["tratamento_tributario"]
+                              or "indeterminado_pendente",
+        confianca=float(row["confianca"]) if row["confianca"] is not None else 0.0,
+        needs_review=bool(row["needs_review"]),
+        via=row["via"] or "heuristica",
+        motivo=None,
+    )
+
+    cat_orig = row["categoria_original"] or cat_atual
+    guard = GuardrailResultado(
+        aplicado=(cat_orig != cat_atual),
+        categoria_original=cat_orig,
+        categoria_corrigida=cat_atual,
+        motivo="",
+        regra_acionada=None,
+    )
+
+    tri = TriagemResultado(
+        disposicao="silencioso",
+        needs_review=bool(row["needs_review"]),
+    )
 
     opiniao = generate_tax_opinion(
         descricao=row["descricao_bruta"],
