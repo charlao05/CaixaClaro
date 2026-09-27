@@ -1,0 +1,10 @@
+{$DOMAIN:?definir DOMAIN} {
+	encode gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	reverse_proxy api:8000
+}

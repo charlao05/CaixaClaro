@@ -55,10 +55,8 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-    # Porta exposta apenas para teste local. Em producao,
-    # um reverse proxy assume a frente (incremento posterior).
-    ports:
-      - "8000:8000"
+    # Porta NAO exposta ao host — somente Caddy alcanca api:8000
+    # pela rede interna do compose.
 
   worker:
     image: caixaclaro-api:prod
@@ -71,5 +69,22 @@ services:
       migrator:
         condition: service_completed_successfully
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?definir DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
 volumes:
   pg_data:
+  caddy_data:
+  caddy_config:
