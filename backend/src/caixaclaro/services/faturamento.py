@@ -35,6 +35,15 @@ FAIXAS: tuple[tuple[Decimal, str, str], ...] = (
 TIPO_ALERTA = "faturamento_faixa"
 
 
+def _load_estado(raw) -> dict:
+    """asyncpg devolve JSONB como str por padrao; normaliza para dict."""
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        return json.loads(raw)
+    return dict(raw)
+
+
 def conta_faturamento(patrimonio: str | None, categoria: str | None) -> bool:
     """Regra §9: so incrementa em atividade_negocio + receita_servico|venda."""
     return (
@@ -114,7 +123,7 @@ async def atualizar_fiscal_state(
         row = await conn.fetchrow(
             "SELECT estado FROM fiscal_state WHERE user_id = $1", user_id
         )
-        estado = dict(row["estado"]) if row else {}
+        estado = _load_estado(row["estado"]) if row else {}
         return FaturamentoResultado(
             antes=Decimal(str(estado.get("faturamento_acumulado", "0"))),
             depois=Decimal(str(estado.get("faturamento_acumulado", "0"))),
@@ -126,7 +135,7 @@ async def atualizar_fiscal_state(
         "SELECT estado FROM fiscal_state WHERE user_id = $1 FOR UPDATE",
         user_id,
     )
-    estado_atual = dict(row["estado"]) if row else {}
+    estado_atual = _load_estado(row["estado"]) if row else {}
 
     novo_estado, resultado = calcular_delta(estado_atual, delta, quando)
 
