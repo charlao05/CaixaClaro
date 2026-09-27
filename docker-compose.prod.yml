@@ -1,0 +1,75 @@
+# docker-compose.prod.yml — M10a.
+#
+# Alvo: VPS container-first (docs/M10_DECISAO.md).
+#
+# name: isola volume, rede e containers do compose de dev.
+# Sem isso, ambos usam o mesmo projeto (nome do diretorio) e
+# colidem em pg_data — vide commit que introduziu este arquivo.
+name: caixaclaro-prod
+#
+# Requer POSTGRES_PASSWORD definida no shell ou em .env na raiz do repo:
+#     $env:POSTGRES_PASSWORD = "<secret>"
+#
+# Nao inclui Caddy, backup ou secrets manager. Esses entram em
+# incrementos posteriores.
+
+services:
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: caixaclaro
+      POSTGRES_USER: caixaclaro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caixaclaro -d caixaclaro"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Porta NAO exposta ao host — apenas a rede interna do compose.
+
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: caixaclaro-api:prod
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://caixaclaro:${POSTGRES_PASSWORD}@db:5432/caixaclaro
+      MIGRATIONS_DIR: /app/migrations
+    command: ["python", "-m", "caixaclaro.migration_runner"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: caixaclaro-api:prod
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://caixaclaro:${POSTGRES_PASSWORD}@db:5432/caixaclaro
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    # Porta exposta apenas para teste local. Em producao,
+    # um reverse proxy assume a frente (incremento posterior).
+    ports:
+      - "8000:8000"
+
+  worker:
+    image: caixaclaro-api:prod
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://caixaclaro:${POSTGRES_PASSWORD}@db:5432/caixaclaro
+    command: ["python", "-m", "caixaclaro.workers"]
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+
+volumes:
+  pg_data:
