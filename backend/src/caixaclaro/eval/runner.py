@@ -11,22 +11,34 @@ from ..domain.fiscal.taxonomia import TAXONOMIA_VERSION
 from ..domain.fiscal.triagem import triar
 
 RECEITAS = ("receita_servico", "receita_venda")
-DESPESAS_NEUTRAS = (
-    "imposto_das", "taxas_tarifas", "custo_operacional",
-    "transferencia_propria", "pessoal_prolabore", "reembolso",
-    "emprestimo", "outros",
-)
 PALAVRAS_NUNCA_RECEITA = (
     "estorno", "devolucao", "reembolso", "ressarcimento",
     "emprestimo", "financiamento",
 )
+
+# §14 — pares (esperado, predito) que sao erro CRITICO.
+CONJUNTO_CRITICO = frozenset({
+    ("transferencia_propria", "receita_servico"),
+    ("transferencia_propria", "receita_venda"),
+    ("emprestimo", "receita_servico"),
+    ("emprestimo", "receita_venda"),
+    ("imposto_das", "pessoal_prolabore"),
+    ("imposto_das", "outros"),
+})
+
 DIFFICULTIES = ("easy", "medium", "hard", "adversarial")
 TAXONOMIA_ESPERADA = "v1"
 DATASET_MIN = 15
+B_MIN = 0.85
+C_MIN = 0.10
+C_MAX = 0.25
+
+
+class GateError(Exception):
+    """Um gate contratual de §18 falhou."""
 
 
 def _validar_schema(casos, schema):
-    """Validacao manual minima — nao depende de jsonschema externo."""
     req = set(schema["items"]["required"])
     props = set(schema["items"]["properties"].keys())
     enum_dif = set(schema["items"]["properties"]["difficulty"]["enum"])
@@ -69,33 +81,36 @@ class Metricas:
     casos: list[CasoResultado] = field(default_factory=list)
 
     @property
-    def A(self) -> int: return self.violacoes
+    def A(self) -> int:
+        return self.violacoes
+
     @property
     def B(self) -> float:
         return self.acertos_avaliaveis / self.avaliaveis if self.avaliaveis else 0.0
+
     @property
     def C(self) -> float:
         return self.abstratidos / self.total if self.total else 0.0
+
     @property
-    def D(self) -> int: return self.erros_criticos
+    def D(self) -> int:
+        return self.erros_criticos
 
 
-def carregar_dataset(caminho: Path) -> list[dict]:
-    return json.loads(caminho.read_text(encoding="utf-8"))
+def carregar_dataset(caminho):
+    return json.loads(Path(caminho).read_text(encoding="utf-8"))
 
 
-def carregar_schema(caminho: Path) -> dict:
-    return json.loads(caminho.read_text(encoding="utf-8"))
+def carregar_schema(caminho):
+    return json.loads(Path(caminho).read_text(encoding="utf-8"))
 
 
-def avaliar(casos: list[dict]) -> Metricas:
+def avaliar(casos):
     if len(casos) < DATASET_MIN:
-        raise ValueError(
-            f"dataset tem {len(casos)} casos, minimo {DATASET_MIN}"
-        )
+        raise ValueError(f"dataset tem {len(casos)}, minimo {DATASET_MIN}")
 
     ctx = ContextoClassificacao(personal_rules={})
-    resultados: list[CasoResultado] = []
+    resultados = []
     violacoes = acertos_avaliaveis = avaliaveis = abstratidos = erros_criticos = 0
     por_dif = defaultdict(lambda: {"total": 0, "abst": 0, "acertos": 0})
 
@@ -107,8 +122,7 @@ def avaliar(casos: list[dict]) -> Metricas:
 
         classif = classificar_v2(desc, valor, ctx)
         guard = aplicar_guardrail(
-            classif,
-            descricao=desc,
+            classif, descricao=desc,
             cpf_titular_hash=caso.get("cpf_titular_hash"),
             cpf_contraparte_hash=caso.get("cpf_contraparte_hash"),
         )
@@ -121,12 +135,10 @@ def avaliar(casos: list[dict]) -> Metricas:
             any(p in norm for p in PALAVRAS_NUNCA_RECEITA)
             and atual in RECEITAS
         )
+        # §14 — apenas pares do CONJUNTO_CRITICO; abstidos nao entram.
         erro_critico = (
             not tri.needs_review
-            and (
-                (esperado in RECEITAS and atual in DESPESAS_NEUTRAS)
-                or (esperado in DESPESAS_NEUTRAS and atual in RECEITAS)
-            )
+            and (esperado, atual) in CONJUNTO_CRITICO
         )
 
         if violacao: violacoes += 1
@@ -157,7 +169,7 @@ def avaliar(casos: list[dict]) -> Metricas:
     )
 
 
-def imprimir(m: Metricas) -> None:
+def imprimir(m):
     print()
     print(f"{'id':5} {'dif':5} {'esperado':22} {'atual':22} {'nr':3} {'viola':5} {'crit':4}")
     print("-" * 76)
@@ -173,14 +185,42 @@ def imprimir(m: Metricas) -> None:
     print(f"C abstencao      = {m.C:.3f} (esperado 0.10..0.25)")
     print(f"D erros criticos = {m.D} (esperado 0)")
     print()
-    print("Breakdown por difficulty:")
-    for dif in DIFFICULTIES:
-        d = m.por_dificuldade.get(dif)
-        if not d:
-            continue
-        print(f"  {dif:12} total={d['total']:2} abst={d['abst']:2} acertos={d['acertos']}")
-    print()
 
 
 def taxonomia_ok() -> bool:
     return TAXONOMIA_VERSION == TAXONOMIA_ESPERADA
+
+
+def avaliar_com_gates(casos, schema=None):
+    """Verifica §18. Levanta GateError no primeiro gate que falhar."""
+    if schema is not None:
+        _validar_schema(casos, schema)
+
+    if not taxonomia_ok():
+        raise GateError(f"TAXONOMIA_VERSION != {TAXONOMIA_ESPERADA!r}")
+
+    m = avaliar(casos)
+
+    if m.avaliaveis < DATASET_MIN:
+        raise GateError(
+            f"|A| = {m.avaliaveis} < {DATASET_MIN} (avaliaveis insuficientes)"
+        )
+
+    if m.A > 0:
+        raise GateError(f"Metrica A = {m.A} (violacoes NUNCA) > 0")
+
+    if m.B < B_MIN:
+        raise GateError(f"Metrica B = {m.B:.3f} < {B_MIN}")
+
+    if not (C_MIN <= m.C <= C_MAX):
+        raise GateError(f"Metrica C = {m.C:.3f} fora de [{C_MIN}, {C_MAX}]")
+
+    for dif in ("easy", "medium"):
+        d = m.por_dificuldade.get(dif, {})
+        if d.get("abst", 0) > 0:
+            raise GateError(f"abstencao em {dif} = {d['abst']} > 0")
+
+    if m.D > 0:
+        raise GateError(f"Metrica D = {m.D} (erros criticos) > 0")
+
+    return m
