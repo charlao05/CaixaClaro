@@ -98,10 +98,12 @@ Critérios:
 
 ## M9 — Eval em CI
 Critérios:
-  - [ ] Golden dataset versionado em tests/golden/
-  - [ ] CI roda eval a cada push
-  - [ ] Resultado publicado em /api/v1/eval/ultima-execucao
+  - [x] Golden dataset versionado em tests/golden/
+  - [x] CI roda eval a cada push
+  - [x] Resultado publicado em /api/v1/eval/ultima-execucao
   - [ ] Bateria A–H executada
+        BLOQUEADO: definição operacional não recuperável.
+        Ver docs/M9.3_DECISAO.md §Fora de escopo.
 
 ## M10 — Produção
 Critérios:
