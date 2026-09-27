@@ -76,11 +76,11 @@ Critérios:
 
 ## M6 — Workers
 Critérios:
-  - [ ] Bateria B de concorrência: exatamente 1 worker processa cada evento
-  - [ ] Renewal implementado
-  - [ ] 6 comportamentos de renewal provados
-  - [ ] Pausa bloqueia cobrança
-  - [ ] Falha de rede → 'pendente_reconciliacao', nunca 'falhou' silencioso
+  - [x] Bateria B de concorrência: exatamente 1 worker processa cada evento
+  - [x] Renewal implementado
+  - [x] 6 comportamentos de renewal provados
+  - [x] Pausa bloqueia cobrança
+  - [x] Falha de rede → 'pendente_reconciliacao', nunca 'falhou' silencioso
 
 ## M7 — Telegram
 Critérios:

@@ -142,3 +142,15 @@ criado.
 Pluggy nao retorna `expiresAt` em /connect_token; nosso response
 devolve expira_em: null. TTL real e 30 min (doc Pluggy). Corrigir
 quando alguem precisar do campo — nao bloqueia M3b.
+
+## 2026-09-27 — M6 fechado por testes; prova operacional Asaas pendente
+
+Renewal e sync worker implementados e cobertos por 19 testes
+(13 sync + 6 renewal). Prova operacional ponta-a-ponta do renewal
+contra Asaas sandbox nao executada por ausencia de ASAAS_API_KEY
+no .env. Worker persistente foi observado rodando e a guard clause
+de configuracao funciona (uma linha, sem retry).
+
+Reabrir M6 apenas se: (a) credencial Asaas sandbox for obtida e o
+renewal real falhar; (b) algum dos 6 comportamentos do §12 divergir
+em uso real.
