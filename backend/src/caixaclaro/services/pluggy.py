@@ -1,0 +1,59 @@
+"""Cliente Pluggy — M3b (conexao).
+
+Escopo minimo: obter API key e criar connect token.
+Sem cache, sem retry, sem persistencia local do token.
+
+Contrato: docs/CONTRATO_API.md secao "Conexao (M3b)".
+"""
+import httpx
+
+from ..config import settings
+from ..security.erros import erro
+
+
+def _credenciais() -> tuple[str, str, str]:
+    s = settings()
+    if not s.pluggy_client_id or not s.pluggy_client_secret:
+        raise erro(
+            503,
+            "PLUGGY_NAO_CONFIGURADO",
+            "Credenciais Pluggy ausentes no ambiente.",
+        )
+    return s.pluggy_client_id, s.pluggy_client_secret, s.pluggy_base_url
+
+
+async def _obter_api_key(client: httpx.AsyncClient) -> str:
+    cid, csecret, _ = _credenciais()
+    r = await client.post(
+        "/auth",
+        json={"clientId": cid, "clientSecret": csecret},
+    )
+    if r.status_code != 200:
+        raise erro(502, "PLUGGY_AUTH_FALHOU", "Falha ao autenticar na Pluggy.")
+    return r.json()["apiKey"]
+
+
+async def criar_connect_token(user_id) -> dict:
+    """Cria connect token Pluggy com clientUserId = user_id.
+
+    Retorna {"connect_token": str, "expira_em": str | None}.
+    """
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.post(
+            "/connect_token",
+            headers={"X-API-KEY": api_key},
+            json={"options": {"clientUserId": str(user_id)}},
+        )
+        if r.status_code not in (200, 201):
+            raise erro(
+                502,
+                "PLUGGY_CONNECT_TOKEN_FALHOU",
+                "Falha ao criar connect token na Pluggy.",
+            )
+        data = r.json()
+        return {
+            "connect_token": data["accessToken"],
+            "expira_em": data.get("expiresAt"),
+        }
