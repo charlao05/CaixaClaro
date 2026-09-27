@@ -1,6 +1,6 @@
 # M4 — Contrato: Inteligência Fiscal (v1)
 
-Status: PROPOSTO. Aguardando segunda auditoria pós-patch.
+Status: APROVADO (v1).
 Referência: docs/CONTRATOS_INTERNOS.md §4 (e §4.1 novo), §5, §6, §15.
 Milestone anterior: M3a PASS.
 
@@ -157,6 +157,13 @@ em `outros` com `needs_review=true`.
     2.8 custos operacionais (posto, combustivel, internet, etc.)
     2.9 venda (venda balcao, shopee)
     2.10 serviço por PJ (agencia ... ltda, servico prestado)
+
+  Regra de sobreposição: as regras 2.1 a 2.10 são avaliadas em
+  ordem, e a PRIMEIRA que casar determina o resultado. Isso
+  resolve casos textualmente ambíguos — por exemplo, "IOF
+  RESGATE POUPANCA" casa tanto 2.5 (transferência própria
+  textual) quanto 2.7 (tarifas); vence 2.7 porque a checagem
+  de tarifa aparece antes na ordem.
 
 ---
 
@@ -800,4 +807,4 @@ comportamento padrão.
 
 ---
 
-Fim do contrato M4 v1. Aguardando segunda auditoria.
+Fim do contrato M4 v1.
