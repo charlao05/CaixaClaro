@@ -23,6 +23,7 @@ from decimal import Decimal
 from ..domain.fiscal.classificacao import ContextoClassificacao
 from ..security.audit import registrar_auditoria
 from ..services.faturamento import atualizar_fiscal_state, conta_faturamento
+from ..services.notificacoes import enviar_alertas_telegram
 from . import pluggy
 from .fiscal import processar_lancamento
 
@@ -204,8 +205,11 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
             page += 1
 
         if delta_total > 0 and data_mais_recente is not None:
-            await atualizar_fiscal_state(
+            res = await atualizar_fiscal_state(
                 conn, sync["user_id"], delta_total, data_mais_recente
+            )
+            await enviar_alertas_telegram(
+                sync["user_id"], res.alertas_criados
             )
 
         await conn.execute(
