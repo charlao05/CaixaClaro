@@ -298,6 +298,25 @@ def _cli() -> int:
     return 0
 
 
+def _commit_atual() -> str:
+    import os
+    import subprocess
+
+    github_sha = os.environ.get("GITHUB_SHA")
+    if github_sha:
+        return github_sha
+
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[3],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
 def _publicar(m, destino: Path, *, executado_em: str) -> None:
     """Grava envelope de M9.3_DECISAO em disco. Chamado apenas em PASS.
 
@@ -305,12 +324,11 @@ def _publicar(m, destino: Path, *, executado_em: str) -> None:
     'ultima execucao bem-sucedida'.
     """
     import json
-    import os
 
     destino.parent.mkdir(parents=True, exist_ok=True)
     envelope = {
         "executado_em": executado_em,
-        "commit": os.environ.get("GITHUB_SHA", "local"),
+        "commit": _commit_atual(),
         "taxonomia_version": TAXONOMIA_VERSION,
         "total": m.total,
         "avaliaveis": m.avaliaveis,
