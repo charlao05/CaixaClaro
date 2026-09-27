@@ -191,3 +191,21 @@ Script de prova (descartado apos execucao):
 Prova real dos 4 estagios do ciclo Telegram:
 credencial valida -> token -> vinculacao -> resposta.
 Arquivo temporario removido; codigo de producao intacto.
+
+## 2026-09-27 — M7 fechado: alerta fiscal entregue ao Telegram
+
+O criterio original "Alerta de DAS enviado" foi reinterpretado apos
+leitura do codigo: faturamento.py so produz alertas do tipo
+faturamento_faixa (cruzamento 60/80/90/95/100/120% do teto MEI).
+Nao existe lembrete de DAS como feature — era escopo disfarcado.
+
+Escopo efetivamente implementado:
+  - FaturamentoResultado ganhou alertas_criados (RETURNING id no
+    INSERT; ON CONFLICT DO NOTHING suprime duplicata sem eco)
+  - services/notificacoes.enviar_alertas_telegram: best-effort,
+    fora da transacao, chama telegram_bot.enviar_mensagem por alerta
+  - /colar, /confirmar e worker chamam apos commit, com chat_id real
+  - 4 testes cobrem envio, ausencia de chat_id, replay idempotente
+    e ausencia de faixa cruzada
+
+M7 fecha com todos os 4 criterios provados.

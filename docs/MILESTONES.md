@@ -87,7 +87,7 @@ Critérios:
   - [x] Bot real responde /start
   - [x] Token único ativo por usuário (coluna ativo)
   - [x] Chat_id vinculado ao usuário correto
-  - [~] Alerta de DAS enviado — PENDENTE: credencial Telegram ausente
+  - [x] Alerta fiscal existente entregue ao Telegram (faturamento_faixa)
 
 ## M8 — Frontend conectado
 Critérios:
