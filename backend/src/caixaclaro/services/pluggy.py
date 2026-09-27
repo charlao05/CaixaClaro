@@ -93,3 +93,26 @@ async def listar_accounts(item_id: str) -> list:
             )
         return r.json()["results"]
 
+
+async def revogar_item(item_id: str) -> None:
+    """DELETE /items/{item_id}. Revoga Item e consent na Pluggy.
+
+    Idempotente do lado Pluggy: 404 e tratado como sucesso, porque o
+    estado desejado (item inexistente) ja esta satisfeito.
+    """
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.delete(
+            f"/items/{item_id}",
+            headers={"X-API-KEY": api_key},
+        )
+        if r.status_code in (200, 204, 404):
+            return
+        raise erro(
+            502,
+            "PLUGGY_REVOGAR_FALHOU",
+            "Falha ao revogar Item na Pluggy.",
+        )
+
+
