@@ -59,15 +59,21 @@ async def processar_item_created(conn, payload: dict) -> dict:
                 continue
             row = await conn.fetchrow(
                 """
-                INSERT INTO accounts (user_id, provider, provider_account_id, nome)
-                VALUES ($1, 'pluggy', $2, $3)
+                INSERT INTO accounts (
+                    user_id, provider, provider_account_id, nome, item_id
+                )
+                VALUES ($1, 'pluggy', $2, $3, $4)
                 ON CONFLICT (provider, provider_account_id) WHERE provider = 'pluggy'
-                DO UPDATE SET nome = EXCLUDED.nome, atualizado_em = now()
+                DO UPDATE SET
+                    nome = EXCLUDED.nome,
+                    item_id = EXCLUDED.item_id,
+                    atualizado_em = now()
                 RETURNING id
                 """,
                 user_id,
                 acc_id,
                 acc.get("name"),
+                item_id,
             )
             account_id_local = row["id"]
 
@@ -95,3 +101,4 @@ async def processar_item_created(conn, payload: dict) -> dict:
         "accounts": len(accounts),
         "sync_requests": criados,
     }
+
