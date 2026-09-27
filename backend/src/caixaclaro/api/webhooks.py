@@ -13,6 +13,7 @@ from ..db import conexao
 from ..security.erros import erro
 from ..services.contas import processar_item_created
 from ..services.billing import processar_webhook_asaas
+from ..services import telegram_bot
 from ..services.telegram import vincular_por_token
 
 router = APIRouter()
@@ -99,6 +100,13 @@ async def webhook_telegram(request: Request):
             "update_id obrigatorio.",
         )
 
+    message = payload.get("message") or {}
+    text = message.get("text") or ""
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+
+    vinculado_para: dict | None = None
+
     async with conexao() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
@@ -114,11 +122,6 @@ async def webhook_telegram(request: Request):
             if row is None:
                 return {"ok": True, "duplicado": True}
 
-            message = payload.get("message") or {}
-            text = message.get("text") or ""
-            chat = message.get("chat") or {}
-            chat_id = chat.get("id")
-
             if not chat_id or not text.startswith("/start"):
                 return {"ok": True, "ignorado": True}
 
@@ -127,7 +130,18 @@ async def webhook_telegram(request: Request):
                 return {"ok": True, "ignorado": "sem_token"}
 
             token = partes[1].strip()
-            resultado = await vincular_por_token(conn, token, int(chat_id))
-            return {"ok": True, "vinculado": resultado}
+            vinculado_para = await vincular_por_token(
+                conn, token, int(chat_id)
+            )
 
+    # Envio fora da transacao: falha no Telegram nao desfaz a vinculacao.
+    try:
+        await telegram_bot.enviar_mensagem(
+            int(chat_id),
+            "CaixaClaro vinculado com sucesso. "
+            "Voce vai receber aqui alertas de faturamento e DAS.",
+        )
+    except Exception as e:
+        print(f"[webhook_telegram] falha ao enviar boas-vindas: {e}")
 
+    return {"ok": True, "vinculado": vinculado_para}
