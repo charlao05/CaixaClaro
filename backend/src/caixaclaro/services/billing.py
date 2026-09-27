@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from ..security.audit import registrar_auditoria
 from ..security.crypto import decifrar_cpf
 from ..security.erros import erro
 from . import asaas
@@ -219,3 +220,215 @@ async def checkout(conn, user_id, plano: str, worker_id: str) -> dict:
         }
     finally:
         await _liberar_claim(conn, payment["id"])
+
+
+# ----------------------------------------------------------------
+# Webhook Asaas (M5.7)
+# ----------------------------------------------------------------
+
+_EVENTOS_QUE_CONFIRMAM = {"PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"}
+
+
+async def _buscar_payment_duplo_lookup(conn, asaas_id, external_ref):
+    """Duplo lookup: asaas_payment_id ou external_reference.
+
+    Se ambos baterem em linhas diferentes, e' inconsistencia local
+    e retornamos None (o webhook nao pode resolver sozinho).
+    """
+    if asaas_id:
+        row = await conn.fetchrow(
+            "SELECT id, user_id, plano, periodo_dias, status, "
+            "       asaas_payment_id, external_reference "
+            "  FROM payments WHERE asaas_payment_id = $1",
+            asaas_id,
+        )
+        if row is not None:
+            if external_ref and row["external_reference"] != external_ref:
+                return None
+            return row
+
+    if external_ref:
+        row = await conn.fetchrow(
+            "SELECT id, user_id, plano, periodo_dias, status, "
+            "       asaas_payment_id, external_reference "
+            "  FROM payments WHERE external_reference = $1",
+            external_ref,
+        )
+        if row is not None:
+            if asaas_id and row["asaas_payment_id"] not in (None, asaas_id):
+                return None
+            return row
+
+    return None
+
+
+async def _conceder_periodo(conn, user_id, plano, periodo_dias, payment_id):
+    """Cria ou estende a subscription do usuario.
+
+    Semantica: subscription.status='ativa' = habilitada para renovacao
+    (DECISOES 2026-09-26). Extensao parte de max(now, periodo_fim).
+    """
+    row = await conn.fetchrow(
+        "SELECT id, periodo_fim FROM subscriptions WHERE user_id = $1",
+        user_id,
+    )
+    if row is None:
+        await conn.execute(
+            """
+            INSERT INTO subscriptions
+              (user_id, plano, status, periodo_inicio, periodo_fim)
+            VALUES ($1, $2, 'ativa', now(),
+                    now() + ($3 || ' days')::interval)
+            """,
+            user_id,
+            plano,
+            periodo_dias,
+        )
+    else:
+        await conn.execute(
+            """
+            UPDATE subscriptions
+               SET plano = $1,
+                   status = 'ativa',
+                   periodo_fim = GREATEST(now(), periodo_fim)
+                                 + ($2 || ' days')::interval,
+                   atualizado_em = now()
+             WHERE id = $3
+            """,
+            plano,
+            periodo_dias,
+            row["id"],
+        )
+
+
+async def _aplicar_payment_confirmed(conn, payment, payload):
+    """Matriz PAYMENT_CONFIRMED × 5 estados locais.
+
+    Retorna (novo_status, politica_b_aplicada).
+    """
+    atual = payment["status"]
+    if atual == "confirmado":
+        return "confirmado", False  # idempotente
+
+    politica_b = atual == "expirado"
+
+    if atual in ("pendente", "pendente_reconciliacao", "expirado", "falhou"):
+        await conn.execute(
+            """
+            UPDATE payments
+               SET status = 'confirmado',
+                   atualizado_em = now()
+             WHERE id = $1
+            """,
+            payment["id"],
+        )
+        await _conceder_periodo(
+            conn,
+            payment["user_id"],
+            payment["plano"],
+            payment["periodo_dias"],
+            payment["id"],
+        )
+        return "confirmado", politica_b
+
+    return atual, False
+
+
+async def processar_webhook_asaas(conn, payload: dict) -> dict:
+    """Processa evento do Asaas.
+
+    Regra dura: user_id NUNCA vem do payload. Vem do payments local.
+    """
+    event = payload.get("event")
+    payment_payload = payload.get("payment") or {}
+    asaas_id = payment_payload.get("id")
+    external_ref = payment_payload.get("externalReference")
+
+    if not event or not asaas_id:
+        raise erro(
+            400,
+            "WEBHOOK_PAYLOAD_INVALIDO",
+            "event e payment.id obrigatorios.",
+        )
+
+    payment = await _buscar_payment_duplo_lookup(conn, asaas_id, external_ref)
+    if payment is None:
+        await registrar_auditoria(
+            conn,
+            ator="webhook_asaas",
+            acao="WEBHOOK_ASAAS_PAYMENT_NAO_ENCONTRADO",
+            alvo=asaas_id,
+            meta={"event": event, "external_reference": external_ref},
+        )
+        return {"ok": True, "payment_encontrado": False}
+
+    user_id = str(payment["user_id"])
+
+    if event in _EVENTOS_QUE_CONFIRMAM:
+        novo, politica_b = await _aplicar_payment_confirmed(conn, payment, payload)
+        await registrar_auditoria(
+            conn,
+            ator="webhook_asaas",
+            acao="PAYMENT_CONFIRMED_APLICADO",
+            user_id=user_id,
+            alvo=asaas_id,
+            meta={
+                "event": event,
+                "payment_id": str(payment["id"]),
+                "status_anterior": payment["status"],
+                "status_novo": novo,
+                "politica_b": politica_b,
+                "periodo_dias": payment["periodo_dias"],
+                "plano": payment["plano"],
+            },
+        )
+        return {
+            "ok": True,
+            "payment_id": str(payment["id"]),
+            "status": novo,
+            "politica_b": politica_b,
+        }
+
+    if event == "PAYMENT_OVERDUE":
+        if payment["status"] == "pendente":
+            await conn.execute(
+                "UPDATE payments SET status = 'expirado', atualizado_em = now() "
+                " WHERE id = $1",
+                payment["id"],
+            )
+        await registrar_auditoria(
+            conn,
+            ator="webhook_asaas",
+            acao="PAYMENT_OVERDUE_APLICADO",
+            user_id=user_id,
+            alvo=asaas_id,
+            meta={"payment_id": str(payment["id"])},
+        )
+        return {"ok": True, "payment_id": str(payment["id"]), "status": "expirado"}
+
+    if event == "PAYMENT_DELETED":
+        if payment["status"] == "pendente":
+            await conn.execute(
+                "UPDATE payments SET status = 'falhou', atualizado_em = now() "
+                " WHERE id = $1",
+                payment["id"],
+            )
+        await registrar_auditoria(
+            conn,
+            ator="webhook_asaas",
+            acao="PAYMENT_DELETED_APLICADO",
+            user_id=user_id,
+            alvo=asaas_id,
+            meta={"payment_id": str(payment["id"])},
+        )
+        return {"ok": True, "payment_id": str(payment["id"]), "status": "falhou"}
+
+    await registrar_auditoria(
+        conn,
+        ator="webhook_asaas",
+        acao="WEBHOOK_ASAAS_EVENTO_IGNORADO",
+        user_id=user_id,
+        alvo=asaas_id,
+        meta={"event": event},
+    )
+    return {"ok": True, "ignorado": event}
