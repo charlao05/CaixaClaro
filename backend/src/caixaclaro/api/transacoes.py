@@ -30,6 +30,7 @@ from ..services.faturamento import (
 )
 from ..services.fiscal import processar_lancamento
 from ..services.tax_opinion import generate_tax_opinion
+from ..services.fiscal_resumo import resumo as resumo_fiscal
 from ..services.fila import confirmar as confirmar_tx, listar_fila
 
 router = APIRouter()
@@ -525,4 +526,15 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         ],
         "confirmada": row["confirmado_por"] is not None,
     }
+
+# ============================================================
+# GET /fiscal/resumo — leitura do estado fiscal
+# ============================================================
+
+@router.get("/fiscal/resumo")
+async def fiscal_resumo_endpoint(
+    u: dict = Depends(usuario),
+):
+    async with conexao() as conn:
+        return await resumo_fiscal(conn, _uuid.UUID(str(u["id"])))
 
