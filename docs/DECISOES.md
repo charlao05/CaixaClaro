@@ -136,3 +136,9 @@ criado.
 **Motivo:** é contrato interno curto; não justifica pasta `specs/`.
 
 **Consequência:** `ESTRUTURA.md` deixa de listar `specs/textnorm.md`.
+
+## 2026-09-27 — connect_token sem expira_em
+
+Pluggy nao retorna `expiresAt` em /connect_token; nosso response
+devolve expira_em: null. TTL real e 30 min (doc Pluggy). Corrigir
+quando alguem precisar do campo — nao bloqueia M3b.

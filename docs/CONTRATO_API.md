@@ -65,6 +65,37 @@ GET /sync/{sync_id} → pendente|processando|completed|failed
 
 sync é assíncrono; sync_request é persistido e processado por worker.
 
+### Conexão (M3b)
+
+POST /contas/conectar
+  Request: {} (identidade via JWT)
+  Response: {connect_token, expira_em}
+  Backend chama POST /connect_token da Pluggy com options.clientUserId = user_id.
+  TTL do connect_token: 30 minutos (Pluggy).
+  Recomendação Pluggy: 1 token por conexão; emitir novo ao criar ou atualizar Item.
+  connect_token NÃO é persistido localmente (TTL curto, sem ganho de segurança).
+
+Webhook item/created:
+  payload traz event, itemId e clientUserId.
+  resolve user via clientUserId.
+  persiste vínculo Item -> user_id em consents (provider='pluggy', provider_user_id=itemId).
+  consulta GET /items/{itemId} e GET /accounts?itemId={itemId} na Pluggy.
+  persiste accounts (provider='pluggy', provider_account_id=account.id).
+  cria/processa sync_request.
+
+Webhook transactions/*:
+  NÃO traz clientUserId. Vínculo user_id resolvido via itemId já persistido.
+
+POST /contas/{id}/revogar:
+  DELETE /items/{item_id} na Pluggy (revoga consent Open Finance quando aplicável).
+  marca consents.revogado_em.
+  Idempotente: revogar já revogado é no-op local.
+
+Sandbox:
+  Pluggy Sandbox permite executar o fluxo sem credenciais reais.
+  Execução da Bateria C contra Sandbox é critério de fechamento do M3b,
+  não consequência automática da existência do Sandbox.
+
 ## Fiscal
 
 GET /fiscal/resumo

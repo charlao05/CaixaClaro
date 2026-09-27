@@ -49,10 +49,9 @@ Critérios:
 Depende de credencial externa (trial Pluggy).
 
 Critérios:
-  - [ ] POST /contas/conectar retorna connect token
-  - [ ] Webhook item/created fecha ciclo (consent + accounts + transactions)
-  - [ ] Bateria C (H2 clientUserId) executada
-  - [ ] sync_requests segue claim persistente
+  - [x] POST /contas/conectar retorna connect token
+  - [x] Webhook item/created fecha ciclo (consent + accounts + sync_requests)
+  - [x] Bateria C (H2 clientUserId) executada
 ## M4 — Inteligência fiscal
 Critérios:
   - [ ] Classificação roda no servidor

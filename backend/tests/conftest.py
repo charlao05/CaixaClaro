@@ -81,6 +81,7 @@ async def limpar_estado(client):
     rate_limit.resetar_tudo()
 
     async with conexao() as conn:
+        await conn.execute("DELETE FROM webhook_events")
         await conn.execute("DELETE FROM idempotency_keys")
         await conn.execute("DELETE FROM alerts")
         await conn.execute("DELETE FROM fiscal_state")
