@@ -1,0 +1,119 @@
+# M10a — Decisão: produção em VPS container-first
+
+## Contexto
+
+M10 tem quatro critérios. Três deles (deploy, backup/observabilidade,
+rollback) são operacionais e não dependem do frontend. O quarto
+(primeiro usuário real end-to-end) depende de M8, que está
+explicitamente pulado neste repositório:
+
+- docs/RECONCILIACAO.md §5: `Frontend | Protótipo fora do repo | NÃO | NÃO | NÃO`
+- docs/MILESTONES.md §M8: todos os critérios `[ ]`, com nota "PULADO"
+
+Esta decisão cobre apenas M10a — backend em produção. M10b (usuário
+real end-to-end) permanece bloqueado até que M8 exista como artefato
+conectado a este repositório.
+
+## Inventário técnico (o que motivou a decisão)
+
+MEDIDO no repositório:
+
+- docker-compose.yml e backend/Dockerfile existem, mas em estado de dev
+- backend/migrations/ tem 8 arquivos, todos forward-only (sem DOWN)
+- workers/__main__.py existe e é o entrypoint do worker
+- webhooks/pluggy, asaas e telegram NÃO verificam origem no caminho
+  de execução analisado (api/webhooks.py)
+- nenhuma referência a cloud, PaaS ou orquestrador no repositório
+- sync worker usa FOR UPDATE SKIP LOCKED (concorrência suportada)
+- renewal usa claim persistente em payments (mecanismo separado)
+
+MEDIDO como ausente:
+
+- backup, restore, rollback, observabilidade de produção
+- aplicação de migrations em produção (hoje só conftest.py aplica)
+- autenticação de webhooks
+
+## Decisão
+
+1. Alvo: VPS única, container-first.
+
+   Nenhuma dependência de estado no host além do Docker e de um
+   diretório para volumes persistentes. A migração futura para PaaS
+   deve permanecer barata: configuração versionada, sem cron do host,
+   sem systemd unit, sem script ad-hoc fora do compose.
+
+2. Topologia (docker-compose de produção):
+
+       internet
+          ↓
+       caddy          TLS automático (Let's Encrypt), Caddyfile versionado
+          ↓
+       api            uvicorn sem --reload
+       worker         python -m caixaclaro.workers
+       postgres       imagem oficial, volume persistente
+       migrator       serviço one-shot, roda antes de api/worker
+       backup         pg_dump diário + envio para storage remoto
+
+3. Migrations rodam como serviço do compose, não no entrypoint da API.
+
+   O runner aplica migrations/*.sql em ordem alfabética e é idempotente,
+   reutilizando a mesma tolerância a reexecução que
+   backend/tests/conftest.py já implementa.
+
+4. Backup.
+
+   pg_dump diário + envio para storage remoto fora da VPS. Retenção de
+   30 dias. Restore testado manualmente uma vez antes de declarar M10a
+   concluído. Automação do teste de restore fica fora desta fase.
+
+5. Observabilidade mínima.
+
+   - GET /healthz → 200, sem checar dependências (liveness)
+   - GET /readyz  → verifica pool do PostgreSQL (readiness)
+   - logs em JSON estruturado para stdout, capturados pelo Docker
+   - nenhuma stack externa (Sentry, Datadog, OTel) nesta fase
+
+   O atual GET /health permanece por compatibilidade, mas não substitui
+   /healthz e /readyz.
+
+6. Rollback.
+
+   - aplicação: retag da imagem anterior + restart de api e worker
+   - schema: migrations forward-only, com regra de compatibilidade —
+     toda migration nova deve ser retrocompatível com a versão anterior
+     da aplicação (ADD COLUMN com default antes de usar; DROP COLUMN só
+     em release posterior à remoção do uso)
+   - rollback ensaiado: uma vez antes de fechar M10a
+
+7. Autenticação de webhooks.
+
+   Mecanismo nativo de cada provedor:
+
+   - Pluggy:   verificar assinatura HMAC no header
+   - Asaas:    verificar token de webhook configurado no painel
+   - Telegram: usar secret_token no setWebhook e verificar o header
+               X-Telegram-Bot-Api-Secret-Token
+
+   Sem essa verificação, os endpoints não devem receber tráfego público.
+
+8. Segredos.
+
+   .env no host com permissão restrita, fora da imagem Docker, lido
+   via env_file do compose. Sem Secrets Manager nesta fase.
+
+## Fora de escopo
+
+- Kubernetes, Terraform, Helm
+- múltiplas réplicas, autoscaling, multi-região
+- Redis, fila externa, serviços auxiliares
+- tracing distribuído, APM, observabilidade sofisticada
+- CI/CD de deploy automatizado (deploy permanece manual)
+- M10b (usuário real end-to-end) — bloqueado por M8
+- migração para PaaS — decisão futura, não bloqueia M10a
+
+## Referências
+
+- docs/PRINCIPIOS.md — definição de "PRODUÇÃO"
+- docs/MILESTONES.md §M10
+- docs/M9.3_DECISAO.md — padrão deste documento
+- docs/RECONCILIACAO.md §5 — frontend fora do repo

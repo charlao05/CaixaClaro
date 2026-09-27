@@ -109,8 +109,8 @@ Critérios:
 ## M10 — Produção
 Critérios:
   - [ ] Deploy em ambiente real
+        DECIDIDO: VPS container-first. Ver docs/M10_DECISAO.md.
   - [ ] Backup e observabilidade ativos
   - [ ] Rollback ensaiado
   - [ ] Primeiro usuário real end-to-end
         ABERTO: via API ou via UI? Depende de M8.
-        BLOQUEADO EM: escolha do ambiente-alvo (VPS / PaaS / outro).
