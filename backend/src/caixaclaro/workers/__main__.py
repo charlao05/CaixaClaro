@@ -11,14 +11,18 @@ Duas tasks concorrentes:
 Ctrl+C encerra limpo.
 """
 import asyncio
+import logging
 import os
 import signal
-import sys
 import uuid
 
 from ..db import abrir_pool, conexao, fechar_pool
+from ..logging_config import setup_logging
 from ..services.renewal import renovar_assinaturas
 from ..services.workers import processar_um_sync
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 WORKER_ID = f"worker-{uuid.uuid4().hex[:8]}"
 TICK_INTERVALO = float(os.environ.get("WORKER_TICK_INTERVALO", "2.0"))
@@ -31,7 +35,7 @@ async def _loop_sync(stop_event: asyncio.Event) -> None:
             async with conexao() as conn:
                 fez = await processar_um_sync(conn, WORKER_ID)
         except Exception as e:
-            print(f"[{WORKER_ID}] erro no sync tick: {e}", file=sys.stderr)
+            logger.error("sync_tick_failed", extra={"worker_id": WORKER_ID, "error": str(e)})
             fez = False
 
         if not fez:
@@ -44,9 +48,9 @@ async def _loop_sync(stop_event: asyncio.Event) -> None:
 async def _loop_renewal(stop_event: asyncio.Event) -> None:
     from ..config import settings
     if not settings().asaas_api_key:
-        print(
-            f"[{WORKER_ID}] renewal: ASAAS_API_KEY ausente — task nao iniciada",
-            file=sys.stderr,
+        logger.warning(
+            "renewal_disabled",
+            extra={"worker_id": WORKER_ID, "reason": "asaas_api_key_missing"},
         )
         return
 
@@ -56,9 +60,9 @@ async def _loop_renewal(stop_event: asyncio.Event) -> None:
             async with conexao() as conn:
                 stats = await renovar_assinaturas(conn, WORKER_ID)
             if stats["total"] > 0:
-                print(f"[{WORKER_ID}] renewal: {stats}", file=sys.stderr)
+                logger.info("renewal_run", extra={"worker_id": WORKER_ID, "stats": stats})
         except Exception as e:
-            print(f"[{WORKER_ID}] erro no renewal: {e}", file=sys.stderr)
+            logger.error("renewal_failed", extra={"worker_id": WORKER_ID, "error": str(e)})
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=RENEWAL_INTERVALO)
@@ -75,7 +79,7 @@ async def _main() -> None:
             loop.add_signal_handler(sig, stop_event.set)
         except NotImplementedError:
             pass  # Windows
-    print(f"[{WORKER_ID}] iniciado")
+    logger.info("worker_started", extra={"worker_id": WORKER_ID})
     try:
         await asyncio.gather(
             _loop_sync(stop_event),
@@ -83,7 +87,7 @@ async def _main() -> None:
         )
     finally:
         await fechar_pool()
-        print(f"[{WORKER_ID}] encerrado")
+        logger.info("worker_stopped", extra={"worker_id": WORKER_ID})
 
 
 if __name__ == "__main__":

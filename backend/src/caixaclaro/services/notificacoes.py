@@ -8,7 +8,12 @@ SEMPRE apos o COMMIT do alerta, nunca dentro da transacao — se o
 Telegram estiver indisponivel, a transacao de banco ja fechou.
 """
 from ..db import conexao
+import logging
+
 from . import telegram_bot
+
+
+logger = logging.getLogger(__name__)
 
 
 async def enviar_alertas_telegram(user_id, alertas) -> int:
@@ -33,5 +38,5 @@ async def enviar_alertas_telegram(user_id, alertas) -> int:
             await telegram_bot.enviar_mensagem(int(chat_id), msg)
             enviados += 1
         except Exception as e:
-            print(f"[notificacoes] falha ao enviar alerta Telegram: {e}")
+            logger.warning("telegram_alert_failed", extra={"error": str(e)})
     return enviados

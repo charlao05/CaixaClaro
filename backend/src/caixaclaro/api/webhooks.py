@@ -7,6 +7,8 @@ registro do evento e o retry da Pluggy efetivamente reprocesse.
 """
 import json
 
+import logging
+
 from fastapi import APIRouter, Request
 
 from ..db import conexao
@@ -17,6 +19,9 @@ from ..services import telegram_bot
 from ..services.telegram import vincular_por_token
 from ..config import settings
 from ..security.webhooks import verificar_header_token
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -159,6 +164,6 @@ async def webhook_telegram(request: Request):
             "Voce vai receber aqui alertas de faturamento e DAS.",
         )
     except Exception as e:
-        print(f"[webhook_telegram] falha ao enviar boas-vindas: {e}")
+        logger.warning("telegram_welcome_failed", extra={"error": str(e)})
 
     return {"ok": True, "vinculado": vinculado_para}

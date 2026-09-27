@@ -9,6 +9,10 @@ from .config import settings
 from .db import abrir_pool, fechar_pool
 from .api import auth, billing, contas, perfil, sync, transacoes, webhooks, telegram
 from .api import eval as eval_api
+from .logging_config import setup_logging
+
+
+setup_logging()
 
 
 @asynccontextmanager
