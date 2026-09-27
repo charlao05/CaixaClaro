@@ -157,3 +157,361 @@ async def test_iniciar_sync_conta_de_outro_usuario_404(client, monkeypatch):
         headers={"Authorization": f"Bearer {token_b}"},
     )
     assert r.status_code == 404
+
+async def test_worker_processa_sync_e_persiste_transacoes(client, monkeypatch):
+    from caixaclaro.services import workers as workers_mod
+
+    token, user_id, account_id = await _criar_conta(
+        client,
+        monkeypatch,
+        "worker1@x.com",
+        "111.111.111-11",
+        "acc-worker-1",
+        "item-worker-1",
+    )
+
+    headers = {"Authorization": f"Bearer {token}"}
+    r = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers=headers,
+    )
+    assert r.status_code == 202, r.json()
+    sync_id = r.json()["sync_id"]
+
+    async def listar_transactions(account_id_provider, page=1, page_size=500):
+        assert account_id_provider == "acc-worker-1"
+        assert page == 1
+        return {
+            "results": [
+                {
+                    "id": "tx-worker-1",
+                    "date": "2026-09-26",
+                    "description": "Compra teste",
+                    "amount": -42.50,
+                },
+                {
+                    "id": "tx-worker-2",
+                    "date": "2026-09-26",
+                    "description": "Receita teste",
+                    "amount": 150.00,
+                },
+            ],
+            "total": 2,
+            "page": 1,
+            "totalPages": 1,
+        }
+
+    monkeypatch.setattr(
+        workers_mod.pluggy,
+        "listar_transactions",
+        listar_transactions,
+    )
+
+    async with conexao() as conn:
+        fez = await workers_mod.processar_um_sync(
+            conn,
+            "worker-test-1",
+        )
+
+        assert fez is True
+
+        status = await conn.fetchval(
+            "SELECT status FROM sync_requests WHERE id = $1",
+            uuid.UUID(sync_id),
+        )
+        assert status == "completed"
+
+        transacoes = await conn.fetch(
+            """
+            SELECT pluggy_tx_id, descricao_bruta, valor
+              FROM transactions
+             WHERE user_id = $1
+             ORDER BY pluggy_tx_id
+            """,
+            uuid.UUID(user_id),
+        )
+
+    assert len(transacoes) == 2
+    assert transacoes[0]["pluggy_tx_id"] == "tx-worker-1"
+    assert transacoes[0]["descricao_bruta"] == "Compra teste"
+    assert transacoes[0]["valor"] == -42.50
+    assert transacoes[1]["pluggy_tx_id"] == "tx-worker-2"
+    assert transacoes[1]["descricao_bruta"] == "Receita teste"
+    assert transacoes[1]["valor"] == 150.00
+
+async def test_worker_processa_sync_paginado(client, monkeypatch):
+    from caixaclaro.services import workers as workers_mod
+
+    token, user_id, account_id = await _criar_conta(
+        client,
+        monkeypatch,
+        "worker2@x.com",
+        "222.222.222-22",
+        "acc-worker-2",
+        "item-worker-2",
+    )
+
+    headers = {"Authorization": f"Bearer {token}"}
+    r = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers=headers,
+    )
+    assert r.status_code == 202
+    sync_id = r.json()["sync_id"]
+
+    paginas = []
+
+    async def listar_transactions(account_id_provider, page=1, page_size=500):
+        paginas.append(page)
+        assert account_id_provider == "acc-worker-2"
+        if page == 1:
+            return {
+                "results": [
+                    {
+                        "id": "tx-page-1",
+                        "date": "2026-09-26",
+                        "description": "Pagina 1",
+                        "amount": -10.00,
+                    }
+                ],
+                "total": 2,
+                "page": 1,
+                "totalPages": 2,
+            }
+        return {
+            "results": [
+                {
+                    "id": "tx-page-2",
+                    "date": "2026-09-25",
+                    "description": "Pagina 2",
+                    "amount": 20.00,
+                }
+            ],
+            "total": 2,
+            "page": 2,
+            "totalPages": 2,
+        }
+
+    monkeypatch.setattr(
+        workers_mod.pluggy,
+        "listar_transactions",
+        listar_transactions,
+    )
+
+    async with conexao() as conn:
+        fez = await workers_mod.processar_um_sync(
+            conn,
+            "worker-test-2",
+        )
+
+        assert fez is True
+
+        status = await conn.fetchval(
+            "SELECT status FROM sync_requests WHERE id = $1",
+            uuid.UUID(sync_id),
+        )
+        assert status == "completed"
+
+        quantidade = await conn.fetchval(
+            "SELECT count(*) FROM transactions WHERE user_id = $1",
+            uuid.UUID(user_id),
+        )
+
+    assert paginas == [1, 2]
+    assert quantidade == 2
+
+
+# ============================================================
+# Worker M6 — claim, falha, recuperacao, idempotencia
+# ============================================================
+
+async def test_worker_claim_exclusao_mutua(client, monkeypatch):
+    """Dois workers concorrentes: apenas um processa o sync.
+
+    Prova FOR UPDATE SKIP LOCKED. Com um unico sync pendente,
+    asyncio.gather dispara duas tasks; no maximo uma processa.
+    """
+    import asyncio
+    from caixaclaro.services import workers as workers_mod
+
+    token, user_id, account_id = await _criar_conta(
+        client, monkeypatch, "worker-conc@x.com",
+        "333.333.333-33", "acc-conc", "item-conc",
+    )
+    r = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 202
+
+    chamadas = []
+
+    async def listar_transactions(acc, page=1, page_size=500):
+        chamadas.append(page)
+        return {
+            "results": [],
+            "total": 0,
+            "page": 1,
+            "totalPages": 1,
+        }
+
+    monkeypatch.setattr(
+        workers_mod.pluggy, "listar_transactions", listar_transactions
+    )
+
+    async def task(worker_id):
+        async with conexao() as conn:
+            return await workers_mod.processar_um_sync(conn, worker_id)
+
+    resultados = await asyncio.gather(task("w-a"), task("w-b"))
+
+    assert sum(resultados) == 1, f"esperava 1 processou, veio {resultados}"
+    assert len(chamadas) == 1
+
+
+async def test_worker_falha_pluggy_marca_failed(client, monkeypatch):
+    """Excecao em pluggy.listar_transactions marca status='failed' com erro."""
+    from caixaclaro.services import workers as workers_mod
+    from fastapi import HTTPException
+
+    token, user_id, account_id = await _criar_conta(
+        client, monkeypatch, "worker-fail@x.com",
+        "444.444.444-44", "acc-fail", "item-fail",
+    )
+    r = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    sync_id = r.json()["sync_id"]
+
+    async def listar_transactions(acc, page=1, page_size=500):
+        raise HTTPException(
+            status_code=502,
+            detail={"erro": "PLUGGY_TRANSACTIONS_FALHOU", "mensagem": "x"},
+        )
+
+    monkeypatch.setattr(
+        workers_mod.pluggy, "listar_transactions", listar_transactions
+    )
+
+    async with conexao() as conn:
+        fez = await workers_mod.processar_um_sync(conn, "w-fail")
+        assert fez is True
+        row = await conn.fetchrow(
+            "SELECT status, erro FROM sync_requests WHERE id = $1",
+            uuid.UUID(sync_id),
+        )
+
+    assert row["status"] == "failed"
+    assert row["erro"] is not None
+    assert "PLUGGY_TRANSACTIONS_FALHOU" in row["erro"]
+
+
+async def test_worker_recupera_processando_antigo(client, monkeypatch):
+    """Sync travado em 'processando' ha muito tempo volta para 'pendente'."""
+    from caixaclaro.services import workers as workers_mod
+
+    token, user_id, account_id = await _criar_conta(
+        client, monkeypatch, "worker-rec@x.com",
+        "555.555.555-55", "acc-rec", "item-rec",
+    )
+
+    async with conexao() as conn:
+        await conn.execute(
+            "DELETE FROM sync_requests WHERE user_id = $1",
+            uuid.UUID(user_id),
+        )
+        await conn.execute(
+            """
+            INSERT INTO sync_requests
+              (user_id, account_id, status, claimed_at, claimed_by)
+            VALUES ($1, $2, 'processando',
+                    now() - interval '10 minutes', 'worker-morto')
+            """,
+            uuid.UUID(user_id),
+            uuid.UUID(account_id),
+        )
+
+        afetados = await workers_mod.recuperar_processando_antigos(
+            conn, segundos=300
+        )
+        assert afetados == 1
+
+        row = await conn.fetchrow(
+            "SELECT status, claimed_by FROM sync_requests WHERE user_id = $1",
+            uuid.UUID(user_id),
+        )
+    assert row["status"] == "pendente"
+    assert row["claimed_by"] is None
+
+
+async def test_worker_idempotente_nao_duplica_transactions(client, monkeypatch):
+    """Rodar duas vezes com mesmos pluggy_tx_id nao duplica transactions."""
+    from caixaclaro.services import workers as workers_mod
+
+    token, user_id, account_id = await _criar_conta(
+        client, monkeypatch, "worker-idem@x.com",
+        "666.666.666-66", "acc-idem", "item-idem",
+    )
+
+    async def listar_transactions(acc, page=1, page_size=500):
+        return {
+            "results": [
+                {
+                    "id": "tx-idem-1",
+                    "date": "2026-09-26",
+                    "description": "A",
+                    "amount": -10.00,
+                },
+                {
+                    "id": "tx-idem-2",
+                    "date": "2026-09-26",
+                    "description": "B",
+                    "amount": 20.00,
+                },
+            ],
+            "total": 2,
+            "page": 1,
+            "totalPages": 1,
+        }
+
+    monkeypatch.setattr(
+        workers_mod.pluggy, "listar_transactions", listar_transactions
+    )
+
+    # Primeira rodada: cria 2 sync e processa ambos
+    r1 = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 202
+
+    async with conexao() as conn:
+        await workers_mod.processar_um_sync(conn, "w-i1")
+        await workers_mod.processar_um_sync(conn, "w-i2")
+
+        quantidade_1 = await conn.fetchval(
+            "SELECT count(*) FROM transactions WHERE user_id = $1",
+            uuid.UUID(user_id),
+        )
+        assert quantidade_1 == 2
+
+    # Segunda rodada: novo sync, mesmos tx_ids
+    r2 = await client.post(
+        f"/api/v1/contas/{account_id}/sync",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r2.status_code == 202
+
+    async with conexao() as conn:
+        # Limpa o sync anterior para garantir que o novo é pego
+        # (o POST reusa pendente; aqui não há pendente, então criou novo)
+        await workers_mod.processar_um_sync(conn, "w-i3")
+
+        quantidade_2 = await conn.fetchval(
+            "SELECT count(*) FROM transactions WHERE user_id = $1",
+            uuid.UUID(user_id),
+        )
+
+    # Continua 2 — idempotencia por (user_id, pluggy_tx_id)
+    assert quantidade_2 == 2
