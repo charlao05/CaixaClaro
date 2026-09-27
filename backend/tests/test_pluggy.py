@@ -121,3 +121,105 @@ async def test_connect_token_falha_erro_502(monkeypatch):
     assert exc.value.detail["erro"] == "PLUGGY_CONNECT_TOKEN_FALHOU"
 
 
+
+async def test_buscar_item(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        if request.url.path == "/items/item-123":
+            assert request.method == "GET"
+            assert request.headers["X-API-KEY"] == "api-key"
+            return httpx.Response(
+                200,
+                json={"id": "item-123", "status": "UPDATED"},
+            )
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await pluggy_mod.buscar_item("item-123")
+
+    assert out == {"id": "item-123", "status": "UPDATED"}
+
+
+async def test_buscar_item_falha_erro_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await pluggy_mod.buscar_item("item-123")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "PLUGGY_ITEM_FALHOU"
+
+
+async def test_listar_accounts(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        if request.url.path == "/accounts":
+            assert request.method == "GET"
+            assert request.headers["X-API-KEY"] == "api-key"
+            assert request.url.params["itemId"] == "item-123"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": "acc-1", "name": "Conta Principal"},
+                        {"id": "acc-2", "name": "Conta Secundaria"},
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await pluggy_mod.listar_accounts("item-123")
+
+    assert out == [
+        {"id": "acc-1", "name": "Conta Principal"},
+        {"id": "acc-2", "name": "Conta Secundaria"},
+    ]
+
+
+async def test_listar_accounts_falha_erro_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        if request.url.path == "/auth":
+            return httpx.Response(200, json={"apiKey": "api-key"})
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        pluggy_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await pluggy_mod.listar_accounts("item-123")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "PLUGGY_ACCOUNTS_FALHOU"
