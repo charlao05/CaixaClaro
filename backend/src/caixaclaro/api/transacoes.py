@@ -2,6 +2,7 @@ import base64
 import binascii
 import uuid as _uuid
 from datetime import date
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request
@@ -17,6 +18,12 @@ from ..domain.ingest.textnorm import calcular_paste_id
 from ..security.audit import registrar_auditoria
 from ..security.erros import erro
 from ..security.idempotency import executar_com_idempotencia
+from ..domain.fiscal.classificacao import ContextoClassificacao
+from ..services.faturamento import (
+    atualizar_fiscal_state,
+    conta_faturamento,
+)
+from ..services.fiscal import processar_lancamento
 
 router = APIRouter()
 
@@ -68,21 +75,48 @@ async def _operacao_colar(conn, user_id: str, texto: str):
     paste_id = calcular_paste_id(texto)
     uid = _uuid.UUID(user_id)
     importados = 0
+    delta_faturamento = Decimal("0")
+    data_mais_recente: date | None = None
+    ctx = ContextoClassificacao(personal_rules={})
 
     for i, l in enumerate(lancamentos):
+        rf = processar_lancamento(
+            l.descricao,
+            l.valor,
+            contexto=ctx,
+            cpf_titular_hash=None,
+            cpf_contraparte_hash=None,
+        )
+        cat = rf.guardrail.categoria_corrigida
+        c = rf.classificacao
+
         inserted = await conn.fetchval(
             """
             INSERT INTO transactions
               (user_id, origem, paste_id, line_index, data,
-               descricao_bruta, valor)
-            VALUES ($1, 'paste', $2, $3, $4, $5, $6)
+               descricao_bruta, valor,
+               categoria, proposito, patrimonio, tratamento_tributario,
+               confianca, needs_review, via, motivo)
+            VALUES ($1, 'paste', $2, $3, $4, $5, $6,
+                    $7, $8, $9, $10, $11, $12, $13, $14)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
             uid, paste_id, i, l.data, l.descricao, l.valor,
+            cat, c.proposito, c.patrimonio, c.tratamento_tributario,
+            c.confianca, rf.triagem.needs_review, c.via, c.motivo,
         )
         if inserted is not None:
             importados += 1
+            if conta_faturamento(c.patrimonio, cat):
+                delta_faturamento += Decimal(str(l.valor))
+                if data_mais_recente is None or l.data > data_mais_recente:
+                    data_mais_recente = l.data
+
+    if delta_faturamento > 0 and data_mais_recente is not None:
+        await atualizar_fiscal_state(
+            conn, uid, delta_faturamento, data_mais_recente
+        )
 
     rows = await conn.fetch(
         """
@@ -109,7 +143,6 @@ async def _operacao_colar(conn, user_id: str, texto: str):
         "importados": importados,
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
-
 
 @router.post("/extrato/colar", status_code=201)
 async def colar(
