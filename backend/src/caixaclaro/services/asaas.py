@@ -6,6 +6,8 @@ Sem retry, sem cache.
 
 Contrato: docs/CONTRATO_API.md secao "Billing".
 """
+from decimal import Decimal
+
 import httpx
 
 from ..config import settings
@@ -83,9 +85,18 @@ async def buscar_pagamento_por_external_reference(ref: str) -> dict | None:
         return data[0] if data else None
 
 
+def _valor_json(valor: Decimal) -> float:
+    """Serializa Decimal para numero JSON.
+
+    O dominio usa Decimal; a API Asaas espera numero JSON. Quantizamos
+    para 2 casas antes de converter, para o JSON sair como 49.9/49.99
+    em vez de 49.899999999996.
+    """
+    return float(valor.quantize(Decimal("0.01")))
+
 async def criar_pagamento_pix(
     customer_id: str,
-    valor: float,
+    valor: Decimal,
     external_reference: str,
     descricao: str,
     due_date: str,
@@ -99,7 +110,7 @@ async def criar_pagamento_pix(
             json={
                 "customer": customer_id,
                 "billingType": "PIX",
-                "value": valor,
+                "value": _valor_json(valor),
                 "dueDate": due_date,
                 "description": descricao,
                 "externalReference": external_reference,
@@ -129,3 +140,4 @@ async def buscar_pix_qrcode(payment_id: str) -> dict:
                 "Falha ao buscar QR code PIX no Asaas.",
             )
         return r.json()
+

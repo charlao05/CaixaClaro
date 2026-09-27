@@ -11,6 +11,7 @@ Cobrem:
 Sem I/O real: httpx.AsyncClient e substituido por MockTransport.
 """
 import json
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -181,7 +182,7 @@ async def test_criar_pagamento_pix(monkeypatch):
     monkeypatch.setattr(asaas_mod.httpx, "AsyncClient", _mock_transport(handler))
     out = await asaas_mod.criar_pagamento_pix(
         customer_id="cus_1",
-        valor=49.9,
+        valor=Decimal("49.90"),
         external_reference="pay-local-1",
         descricao="CaixaClaro pro_mensal",
         due_date="2026-10-15",
@@ -209,4 +210,5 @@ async def test_buscar_pix_qrcode(monkeypatch):
     out = await asaas_mod.buscar_pix_qrcode("pay_1")
     assert out["payload"] == "000201263..."
     assert "encodedImage" in out
+
 
