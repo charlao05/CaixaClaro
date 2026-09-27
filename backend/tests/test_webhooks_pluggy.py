@@ -65,6 +65,18 @@ async def test_webhook_item_created_cria_consent_account_e_sync(client, monkeypa
     assert await _contar("sync_requests") == 2
     assert await _contar("webhook_events") == 1
 
+    async with conexao() as conn:
+        item_ids = await conn.fetch(
+            """
+            SELECT item_id
+              FROM accounts
+             WHERE user_id = $1
+             ORDER BY provider_account_id
+            """,
+            user_id,
+        )
+    assert [r["item_id"] for r in item_ids] == ["item-123", "item-123"]
+
 
 async def test_webhook_mesmo_event_id_nao_duplica(client, monkeypatch):
     _, user_id = await _registrar(client)
@@ -112,3 +124,4 @@ async def test_webhook_evento_desconhecido_apenas_registra(client):
     assert r.json() == {"ok": True, "ignorado": "transactions/created"}
     assert await _contar("webhook_events") == 1
     assert await _contar("consents") == 0
+
