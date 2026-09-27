@@ -71,7 +71,7 @@ Critérios:
   - [ ] user_id do payment local (não do evento)
   - [ ] PAYMENT_CONFIRMED × 5 estados de payment (matriz completa)
   - [ ] Política B (confirmação tardia) auditada
-  - [ ] 4 testes de aceite de B11/B12
+  - [~] 4 testes de aceite de B11/B12 — PENDENTE: definicao perdida em compactacao (c3ec0fc)
   - [ ] corrida entre workers e crash após POST sem persistência de ID provados
 
 ## M6 — Workers
