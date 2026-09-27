@@ -1,27 +1,32 @@
-"""Runner de eval — M4_CONTRATO §14 + §18.
+"""Runner de eval — M4_CONTRATO §12 + §14 + §18.
 
-Duas entradas:
+Entradas:
+
+  carregar_dataset(caminho) -> dict
+      Carrega o envelope {taxonomia_version, criado_em, casos}.
+      Array puro NAO e aceito — levanta ValueError.
 
   avaliar(casos) -> Metricas
       Coleta pura. Levanta ValueError se |C| < DATASET_MIN.
 
-  avaliar_com_gates(casos, *, schema, taxonomia_dataset=None) -> Metricas
-      Verifica §18 e levanta GateError no primeiro gate que falhar.
-      Ordem: schema -> taxonomia do codigo -> taxonomia do dataset
-      (se informada) -> |A| >= 15 -> A(violacoes)=0 -> B>=0.85 ->
-      C em [0.10, 0.25] -> sem abst em easy/medium -> D=0.
+  avaliar_com_gates(dataset, *, schema) -> Metricas
+      Valida o envelope contra schema (jsonschema), compara
+      dataset.taxonomia_version com TAXONOMIA_VERSION, e roda os
+      gates §18. Levanta GateError no primeiro que falhar.
 
 CLI:
 
   python -m caixaclaro.eval.runner
-      Carrega tests/golden/{dataset_v1.json,schema.json}, executa e
-      retorna exit code 0 (PASS) ou 1 (FAIL).
+      Carrega tests/golden/*, executa, imprime relatorio.
+      Exit code 0 (PASS) ou 1 (FAIL).
 """
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+
+import jsonschema
 
 from ..domain.fiscal.classificacao import ContextoClassificacao, classificar_v2
 from ..domain.fiscal.guardrails import aplicar_guardrail
@@ -35,8 +40,7 @@ PALAVRAS_NUNCA_RECEITA = (
 )
 
 # §14 — pares (esperado, predito) que sao erro CRITICO.
-# GRAVE (reembolso->receita_*) e RELEVANTE (receita_servico->reembolso)
-# NAO entram: alertam, nao reprovam.
+# GRAVE e RELEVANTE alertam, nao reprovam.
 CONJUNTO_CRITICO = frozenset({
     ("transferencia_propria", "receita_servico"),
     ("transferencia_propria", "receita_venda"),
@@ -56,25 +60,6 @@ C_MAX = 0.25
 
 class GateError(Exception):
     """Um gate contratual de §18 falhou."""
-
-
-def _validar_schema(casos, schema):
-    req = set(schema["items"]["required"])
-    props = set(schema["items"]["properties"].keys())
-    enum_dif = set(schema["items"]["properties"]["difficulty"]["enum"])
-    ids_vistos = set()
-    for i, c in enumerate(casos):
-        faltando = req - set(c.keys())
-        if faltando:
-            raise ValueError(f"caso #{i} ({c.get('id')}) faltando: {faltando}")
-        extras = set(c.keys()) - props
-        if extras:
-            raise ValueError(f"caso #{i} ({c.get('id')}) campos extras: {extras}")
-        if c["difficulty"] not in enum_dif:
-            raise ValueError(f"caso {c['id']} difficulty invalida: {c['difficulty']}")
-        if c["id"] in ids_vistos:
-            raise ValueError(f"id duplicado: {c['id']}")
-        ids_vistos.add(c["id"])
 
 
 @dataclass(frozen=True)
@@ -118,17 +103,15 @@ class Metricas:
         return self.erros_criticos
 
 
-def carregar_dataset_com_meta(caminho):
-    """Aceita array puro (v1) ou {"taxonomia_version": ..., "casos": [...]}."""
-    data = json.loads(Path(caminho).read_text(encoding="utf-8"))
-    if isinstance(data, dict):
-        return list(data.get("casos", [])), data.get("taxonomia_version")
-    return list(data), None
-
-
 def carregar_dataset(caminho):
-    casos, _ = carregar_dataset_com_meta(caminho)
-    return casos
+    """Carrega envelope §12. Recusa array puro."""
+    dados = json.loads(Path(caminho).read_text(encoding="utf-8"))
+    if not isinstance(dados, dict):
+        raise ValueError(
+            "dataset deve ser envelope {taxonomia_version, criado_em, casos}; "
+            f"recebido: {type(dados).__name__}"
+        )
+    return dados
 
 
 def carregar_schema(caminho):
@@ -228,40 +211,43 @@ def taxonomia_ok() -> bool:
     return TAXONOMIA_VERSION == TAXONOMIA_ESPERADA
 
 
-def avaliar_com_gates(casos, *, schema, taxonomia_dataset=None):
-    """Verifica §18. Levanta GateError no primeiro gate que falhar."""
-    _validar_schema(casos, schema)
+def avaliar_com_gates(dataset, *, schema):
+    """Verifica §18. Levanta GateError no primeiro gate que falhar.
 
-    if not taxonomia_ok():
-        raise GateError(f"TAXONOMIA_VERSION != {TAXONOMIA_ESPERADA!r}")
+    dataset: envelope {taxonomia_version, criado_em, casos}
+    schema:  JSON Schema do envelope
+    """
+    try:
+        jsonschema.validate(dataset, schema)
+    except jsonschema.ValidationError as e:
+        raise GateError(f"schema invalido: {e.message}") from e
 
-    if taxonomia_dataset is not None and taxonomia_dataset != TAXONOMIA_ESPERADA:
+    taxonomia_ds = dataset.get("taxonomia_version")
+    if taxonomia_ds != TAXONOMIA_ESPERADA:
         raise GateError(
-            f"taxonomia_version do dataset != {TAXONOMIA_ESPERADA!r} "
-            f"(recebido: {taxonomia_dataset!r})"
+            f"taxonomia_version do dataset = {taxonomia_ds!r} "
+            f"!= {TAXONOMIA_ESPERADA!r}"
         )
 
-    m = avaliar(casos)
+    if not taxonomia_ok():
+        raise GateError(f"TAXONOMIA_VERSION (codigo) != {TAXONOMIA_ESPERADA!r}")
+
+    m = avaliar(dataset["casos"])
 
     if m.avaliaveis < DATASET_MIN:
         raise GateError(
             f"|A| = {m.avaliaveis} < {DATASET_MIN} (avaliaveis insuficientes)"
         )
-
     if m.violacoes > 0:
         raise GateError(f"Metrica A (violacoes NUNCA) = {m.violacoes} > 0")
-
     if m.B < B_MIN:
         raise GateError(f"Metrica B = {m.B:.3f} < {B_MIN}")
-
     if not (C_MIN <= m.C <= C_MAX):
         raise GateError(f"Metrica C = {m.C:.3f} fora de [{C_MIN}, {C_MAX}]")
-
     for dif in ("easy", "medium"):
         d = m.por_dificuldade.get(dif, {})
         if d.get("abst", 0) > 0:
             raise GateError(f"abstencao em {dif} = {d['abst']} > 0")
-
     if m.D > 0:
         raise GateError(f"Metrica D = {m.D} (erros criticos) > 0")
 
@@ -269,23 +255,21 @@ def avaliar_com_gates(casos, *, schema, taxonomia_dataset=None):
 
 
 def _cli() -> int:
-    """Executa o dataset golden e retorna exit code (0=PASS, 1=FAIL)."""
+    import sys
     backend = Path(__file__).resolve().parents[3]
     golden = backend / "tests" / "golden"
 
     try:
-        casos, taxonomia_ds = carregar_dataset_com_meta(golden / "dataset_v1.json")
+        dataset = carregar_dataset(golden / "dataset_v1.json")
         schema = carregar_schema(golden / "schema.json")
-    except FileNotFoundError as e:
-        print(f"FAIL: arquivo nao encontrado: {e}", file=__import__("sys").stderr)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"FAIL: {e}", file=sys.stderr)
         return 1
 
     try:
-        m = avaliar_com_gates(
-            casos, schema=schema, taxonomia_dataset=taxonomia_ds,
-        )
+        m = avaliar_com_gates(dataset, schema=schema)
     except GateError as e:
-        print(f"FAIL: {e}", file=__import__("sys").stderr)
+        print(f"FAIL: {e}", file=sys.stderr)
         return 1
 
     imprimir(m)

@@ -5,17 +5,16 @@ import pytest
 
 from caixaclaro.eval import runner as r
 from caixaclaro.eval.runner import (
-    CONJUNTO_CRITICO, DATASET_MIN, GateError, Metricas,
-    avaliar, avaliar_com_gates, carregar_schema,
+    CONJUNTO_CRITICO,
+    GateError,
+    Metricas,
+    avaliar,
+    avaliar_com_gates,
+    carregar_schema,
 )
 
 SCHEMA = Path(__file__).parent / "golden" / "schema.json"
 SCHEMA_OBJ = carregar_schema(SCHEMA)
-
-
-def _gate(casos, **kw):
-    """Atalho: avaliar_com_gates com schema padrao."""
-    return avaliar_com_gates(casos, schema=SCHEMA_OBJ, **kw)
 
 
 def _caso(i, desc, cat, diff="easy", esp=None):
@@ -35,6 +34,14 @@ def _dataset_minimo(n=20):
     ]
 
 
+def _envelope(casos, *, taxonomia_version="v1", criado_em="2026-09-27"):
+    return {
+        "taxonomia_version": taxonomia_version,
+        "criado_em": criado_em,
+        "casos": casos,
+    }
+
+
 def _metricas(**overrides):
     base = dict(
         total=20, violacoes=0, acertos_avaliaveis=20, avaliaveis=20,
@@ -46,19 +53,47 @@ def _metricas(**overrides):
     return Metricas(**base)
 
 
-def test_gate_valida_schema():
+def _gate(casos, **kw):
+    return avaliar_com_gates(_envelope(casos), schema=SCHEMA_OBJ, **kw)
+
+
+# ============================================================
+# Gate 0 — schema
+# ============================================================
+
+def test_gate_valida_schema_caso_com_campo_extra():
     casos = _dataset_minimo()
-    schema = carregar_schema(SCHEMA)
     casos[0]["campo_extra"] = "x"
-    with pytest.raises(ValueError, match="campos extras"):
-        avaliar_com_gates(casos, schema=schema)
+    with pytest.raises(GateError, match="schema invalido"):
+        avaliar_com_gates(_envelope(casos), schema=SCHEMA_OBJ)
 
 
-def test_gate_verifica_taxonomia(monkeypatch):
+def test_gate_valida_schema_envelope_sem_taxonomia():
+    casos = _dataset_minimo()
+    env = {"criado_em": "2026-09-27", "casos": casos}
+    with pytest.raises(GateError, match="schema invalido"):
+        avaliar_com_gates(env, schema=SCHEMA_OBJ)
+
+
+# ============================================================
+# Gate 1 — taxonomia (dataset e codigo)
+# ============================================================
+
+def test_gate_recusa_taxonomia_dataset_divergente():
+    env = _envelope(_dataset_minimo(), taxonomia_version="v2")
+    with pytest.raises(GateError, match="taxonomia_version"):
+        avaliar_com_gates(env, schema=SCHEMA_OBJ)
+
+
+def test_gate_recusa_taxonomia_codigo_divergente(monkeypatch):
     monkeypatch.setattr(r, "taxonomia_ok", lambda: False)
     with pytest.raises(GateError, match="TAXONOMIA_VERSION"):
         _gate(_dataset_minimo())
 
+
+# ============================================================
+# Gate 2 — |A| >= DATASET_MIN
+# ============================================================
 
 def test_gate_recusa_avaliaveis_insuficientes():
     casos = _dataset_minimo(n=20)
@@ -67,6 +102,10 @@ def test_gate_recusa_avaliaveis_insuficientes():
     with pytest.raises(GateError, match="avaliaveis"):
         _gate(casos)
 
+
+# ============================================================
+# Gates 3-7 — via monkeypatch
+# ============================================================
 
 def test_gate_A_positivo(monkeypatch):
     monkeypatch.setattr(r, "avaliar", lambda c: _metricas(violacoes=1))
@@ -131,8 +170,6 @@ def test_gate_abstencao_em_medium(monkeypatch):
 
 
 def test_gate_D_positivo(monkeypatch):
-    # Metricas que passam em todos os gates anteriores (|A|, A, B, C,
-    # easy/medium) e so falham em D. Ordem §18 importa.
     monkeypatch.setattr(
         r, "avaliar",
         lambda c: _metricas(
@@ -148,6 +185,10 @@ def test_gate_D_positivo(monkeypatch):
     with pytest.raises(GateError, match="Metrica D"):
         _gate(_dataset_minimo())
 
+
+# ============================================================
+# CONJUNTO_CRITICO
+# ============================================================
 
 def test_conjunto_critico_contem_pares_do_contrato():
     assert ("transferencia_propria", "receita_servico") in CONJUNTO_CRITICO
