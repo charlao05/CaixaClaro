@@ -154,3 +154,18 @@ de configuracao funciona (uma linha, sem retry).
 Reabrir M6 apenas se: (a) credencial Asaas sandbox for obtida e o
 renewal real falhar; (b) algum dos 6 comportamentos do §12 divergir
 em uso real.
+
+## 2026-09-27 — M7 fechado parcialmente; bot real pendente
+
+Vinculacao Telegram por token implementada e coberta por 8 testes
+(token unico ativo, /start <token> grava chat_id, token expirado,
+token invalido, update_id duplicado, payload invalido, /start sem
+token, auth obrigatoria).
+
+Pendentes por ausencia de credencial Telegram (bot token):
+  - bot real respondendo /start
+  - envio de alerta de DAS
+
+Reabrir M7 apenas se: (a) credencial Telegram obtida e algum
+comportamento divergir; (b) algum dos 2 criterios pendentes exigir
+mudanca de contrato.

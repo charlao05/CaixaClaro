@@ -84,10 +84,10 @@ Critérios:
 
 ## M7 — Telegram
 Critérios:
-  - [ ] Bot real responde /start
-  - [ ] Token único ativo por usuário (coluna ativo)
-  - [ ] Chat_id vinculado ao usuário correto
-  - [ ] Alerta de DAS enviado
+  - [~] Bot real responde /start — PENDENTE: credencial Telegram ausente
+  - [x] Token único ativo por usuário (coluna ativo)
+  - [x] Chat_id vinculado ao usuário correto
+  - [~] Alerta de DAS enviado — PENDENTE: credencial Telegram ausente
 
 ## M8 — Frontend conectado
 Critérios:
