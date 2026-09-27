@@ -21,10 +21,17 @@ async def listar_contas(u: dict = Depends(usuario)):
     async with conexao() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, provider, provider_account_id, nome, criado_em
-              FROM accounts
-             WHERE user_id = $1
-             ORDER BY criado_em DESC, id DESC
+            SELECT a.id, a.provider, a.provider_account_id, a.nome, a.criado_em
+              FROM accounts a
+             WHERE a.user_id = $1
+               AND NOT EXISTS (
+                 SELECT 1 FROM consents c
+                  WHERE c.provider = a.provider
+                    AND c.provider_user_id = a.item_id
+                    AND c.user_id = a.user_id
+                    AND c.revogado_em IS NOT NULL
+               )
+             ORDER BY a.criado_em DESC, a.id DESC
             """,
             u["id"],
         )
@@ -52,6 +59,4 @@ async def sincronizar_conta(id: str, u: dict = Depends(usuario)):
     from ..services.contas import iniciar_sync
     async with conexao() as conn:
         return await iniciar_sync(conn, u["id"], id)
-
-
 

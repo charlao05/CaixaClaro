@@ -487,3 +487,79 @@ async def test_revogar_item_conta_inexistente_404(client):
 
     assert exc.value.status_code == 404
     assert exc.value.detail["erro"] == "CONTA_NAO_ENCONTRADA"
+
+
+async def test_get_contas_apos_revogacao_nao_lista(client, monkeypatch):
+    """Conta com consent revogado deixa de aparecer em GET /contas."""
+    from caixaclaro.db import conexao
+    from caixaclaro.services import pluggy as pluggy_mod
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "rev-lista@x.com",
+            "senha": "senha123",
+            "cpf": "107.107.107-07",
+        },
+    )
+    assert r.status_code == 201
+    token = r.json()["token"]
+
+    async with conexao() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE email = $1", "rev-lista@x.com"
+        )
+
+    async def buscar_item(item_id):
+        return {"id": item_id}
+
+    async def listar_accounts(item_id):
+        return [{"id": "acc-rev-lista", "name": "Conta"}]
+
+    chamadas = []
+
+    async def revogar_item(item_id):
+        chamadas.append(item_id)
+
+    monkeypatch.setattr(pluggy_mod, "buscar_item", buscar_item)
+    monkeypatch.setattr(pluggy_mod, "listar_accounts", listar_accounts)
+    monkeypatch.setattr(pluggy_mod, "revogar_item", revogar_item)
+
+    r = await client.post(
+        "/api/v1/webhooks/pluggy",
+        json={
+            "event": "item/created",
+            "eventId": "evt-rev-lista",
+            "itemId": "item-rev-lista",
+            "clientUserId": str(user_id),
+        },
+    )
+    assert r.status_code == 200
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Antes de revogar: aparece
+    r = await client.get("/api/v1/contas", headers=headers)
+    assert r.status_code == 200
+    assert len(r.json()["itens"]) == 1
+
+    # Revoga
+    async with conexao() as conn:
+        account_id = await conn.fetchval(
+            "SELECT id FROM accounts WHERE user_id = $1 AND provider_account_id = 'acc-rev-lista'",
+            user_id,
+        )
+        await contas.revogar_item(conn, user_id, account_id)
+
+    # Depois: nao aparece mais
+    r = await client.get("/api/v1/contas", headers=headers)
+    assert r.status_code == 200
+    assert r.json() == {"itens": []}
+
+    # Mas a linha continua no banco (historico preservado)
+    async with conexao() as conn:
+        existe = await conn.fetchval(
+            "SELECT count(*) FROM accounts WHERE user_id = $1 AND provider_account_id = 'acc-rev-lista'",
+            user_id,
+        )
+    assert existe == 1
