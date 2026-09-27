@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .db import abrir_pool, fechar_pool
-from .api import auth, perfil, transacoes
+from .api import auth, contas, perfil, transacoes
 
 
 @asynccontextmanager
@@ -50,6 +50,7 @@ def criar_app() -> FastAPI:
     app.include_router(auth.router,   prefix="/api/v1/auth",   tags=["auth"])
     app.include_router(perfil.router, prefix="/api/v1/perfil", tags=["perfil"])
     app.include_router(transacoes.router, prefix="/api/v1/transacoes", tags=["transacoes"])
+    app.include_router(contas.router,    prefix="/api/v1/contas",    tags=["contas"])
 
     @app.get("/health")
     async def health():
