@@ -79,7 +79,7 @@ def _serializar_completa(r) -> dict:
 # POST /extrato/colar
 # ============================================================
 
-async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list):
+async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, regime: str):
     try:
         lancamentos = parse_texto(texto)
     except ExtratoIlegivel as e:
@@ -90,7 +90,7 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list):
     importados = 0
     delta_faturamento = Decimal("0")
     data_mais_recente: date | None = None
-    ctx = ContextoClassificacao(personal_rules={})
+    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
 
     for i, l in enumerate(lancamentos):
         rf = processar_lancamento(
@@ -170,7 +170,8 @@ async def colar(
 
     async def op(conn):
         return await _operacao_colar(
-            conn, str(u["id"]), dados.texto, alertas_para_enviar
+            conn, str(u["id"]), dados.texto, alertas_para_enviar,
+            u["regime"],
         )
 
     resposta, status_http = await executar_com_idempotencia(
@@ -188,7 +189,7 @@ async def colar(
 # POST /importar
 # ============================================================
 
-async def _operacao_importar(conn, user_id: str, formato: str, bruto: bytes):
+async def _operacao_importar(conn, user_id: str, formato: str, bruto: bytes, regime: str):
     try:
         if formato == "csv":
             lancamentos = parse_csv(bruto)
@@ -258,7 +259,9 @@ async def importar(
         raise erro(400, "ARQUIVO_ILEGIVEL", "Arquivo vazio.")
 
     async def op(conn):
-        return await _operacao_importar(conn, str(u["id"]), dados.formato, bruto)
+        return await _operacao_importar(
+            conn, str(u["id"]), dados.formato, bruto, u["regime"]
+        )
 
     resposta, status_http = await executar_com_idempotencia(
         user_id=str(u["id"]),

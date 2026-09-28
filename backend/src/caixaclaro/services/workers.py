@@ -64,9 +64,11 @@ async def _reivindicar_sync(conn, worker_id: str):
         row = await conn.fetchrow(
             """
             SELECT sr.id, sr.user_id, sr.account_id,
-                   a.provider_account_id
+                   a.provider_account_id,
+                   u.regime
               FROM sync_requests sr
               JOIN accounts a ON a.id = sr.account_id
+              JOIN users u ON u.id = sr.user_id
              WHERE sr.status = 'pendente'
              ORDER BY sr.criado_em
              LIMIT 1
@@ -100,7 +102,7 @@ def _normalizar_data(valor):
     return None
 
 
-async def _persistir_transacoes(conn, user_id, account_id, results):
+async def _persistir_transacoes(conn, user_id, account_id, results, regime):
     """Upsert de transacoes Pluggy + classificacao fiscal.
 
     Retorna (inseridas, delta_faturamento, data_mais_recente).
@@ -112,7 +114,7 @@ async def _persistir_transacoes(conn, user_id, account_id, results):
     inseridas = 0
     delta = Decimal("0")
     data_mais_recente = None
-    ctx = ContextoClassificacao(personal_rules={})
+    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
 
     for tx in results:
         tx_id = tx.get("id")
@@ -193,6 +195,7 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
                 sync["user_id"],
                 sync["account_id"],
                 payload.get("results") or [],
+                sync["regime"],
             )
             total_inseridas += inseridas
             delta_total += delta
