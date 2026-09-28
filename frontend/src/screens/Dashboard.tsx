@@ -8,6 +8,7 @@ import { listarFila, type ItemFila } from '../services/fila'
 type Props = {
   sessao: Sessao
   onLogout: () => void
+  onNovaIngestao: () => void
 }
 
 function formatBRL(s: string): string {
@@ -16,7 +17,7 @@ function formatBRL(s: string): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default function Dashboard({ sessao, onLogout }: Props) {
+export default function Dashboard({ sessao, onLogout, onNovaIngestao }: Props) {
   const [resumo, setResumo] = useState<FiscalResumo | null>(null)
   const [alertas, setAlertas] = useState<Alerta[] | null>(null)
   const [fila, setFila] = useState<ItemFila[] | null>(null)
@@ -55,6 +56,9 @@ export default function Dashboard({ sessao, onLogout }: Props) {
       <h1>CaixaClaro</h1>
       <div>
         <span>{sessao.user.email}</span>
+        <button type="button" onClick={onNovaIngestao}>
+          Nova ingestao
+        </button>
         <button type="button" onClick={onLogout}>
           Sair
         </button>

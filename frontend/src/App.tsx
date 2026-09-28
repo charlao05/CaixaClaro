@@ -5,12 +5,15 @@ import { logout as apiLogout } from './services/auth'
 import Login from './screens/Login'
 import Register from './screens/Register'
 import Dashboard from './screens/Dashboard'
+import Ingestao from './screens/Ingestao'
 
 type ViewNaoAutenticado = 'login' | 'register'
+type ViewAutenticado = 'dashboard' | 'ingestao'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
   const [view, setView] = useState<ViewNaoAutenticado>('login')
+  const [viewAuth, setViewAuth] = useState<ViewAutenticado>('dashboard')
 
   async function handleLogout() {
     if (!sessao) return
@@ -22,6 +25,7 @@ export default function App() {
     limparSessao()
     setSessao(null)
     setView('login')
+    setViewAuth('dashboard')
   }
 
   if (!sessao) {
@@ -41,5 +45,20 @@ export default function App() {
     )
   }
 
-  return <Dashboard sessao={sessao} onLogout={handleLogout} />
+  if (viewAuth === 'ingestao') {
+    return (
+      <Ingestao
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+      />
+    )
+  }
+
+  return (
+    <Dashboard
+      sessao={sessao}
+      onLogout={handleLogout}
+      onNovaIngestao={() => setViewAuth('ingestao')}
+    />
+  )
 }
