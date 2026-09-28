@@ -48,6 +48,11 @@ CONJUNTO_CRITICO = frozenset({
     ("emprestimo", "receita_venda"),
     ("imposto_das", "pessoal_prolabore"),
     ("imposto_das", "outros"),
+    # M8_DECISAO.md D1 — reembolso classificado como receita e' critico
+    ("reembolso", "receita_servico"),
+    ("reembolso", "receita_venda"),
+    # M8_DECISAO.md D2c — imposto classificado como reembolso e' critico
+    ("imposto_das", "reembolso"),
 })
 
 DIFFICULTIES = ("easy", "medium", "hard", "adversarial")

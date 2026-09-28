@@ -199,9 +199,12 @@ def test_conjunto_critico_contem_pares_do_contrato():
     assert ("imposto_das", "outros") in CONJUNTO_CRITICO
 
 
-def test_conjunto_critico_exclui_grave_e_relevante():
-    assert ("reembolso", "receita_servico") not in CONJUNTO_CRITICO
-    assert ("reembolso", "receita_venda") not in CONJUNTO_CRITICO
+def test_conjunto_critico_exclui_pares_que_permanecem_grave():
+    """Pares que permanecem GRAVE/RELEVANTE nao estao em CONJUNTO_CRITICO.
+
+    M8_DECISAO.md D1 moveu reembolso->receita_* para CRITICO.
+    O par inverso receita->reembolso nao foi tocado e permanece fora.
+    """
     assert ("receita_servico", "reembolso") not in CONJUNTO_CRITICO
 
 
@@ -229,3 +232,51 @@ def test_D_nao_conta_abstido():
     ))
     m = avaliar(casos)
     assert m.D == 0
+
+
+# ============================================================
+# D1, D2b, D2c — M8_DECISAO.md
+# ============================================================
+
+def test_conjunto_critico_inclui_reembolso_como_receita():
+    """D1 — reembolso classificado como receita e' erro critico."""
+    assert ("reembolso", "receita_servico") in CONJUNTO_CRITICO
+    assert ("reembolso", "receita_venda") in CONJUNTO_CRITICO
+
+
+def test_conjunto_critico_inclui_imposto_das_como_reembolso():
+    """D2c — imposto classificado como reembolso e' erro critico."""
+    assert ("imposto_das", "reembolso") in CONJUNTO_CRITICO
+
+
+def test_conjunto_critico_imposto_das_como_outros_permanece():
+    """D2b — decisao M8: manter critico (divergente do prototipo, peso 4.0)."""
+    assert ("imposto_das", "outros") in CONJUNTO_CRITICO
+
+
+def test_D_detecta_reembolso_classificado_como_receita():
+    """D1 — comportamento end-to-end via pipeline real."""
+    casos = _dataset_minimo(n=20)
+    casos.append(_caso(
+        100,
+        "CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA",
+        "receita_servico",
+        diff="hard",
+        esp="reembolso",
+    ))
+    m = avaliar(casos)
+    assert m.D == 1, f"D={m.D}, esperado 1"
+
+
+def test_D_detecta_imposto_das_classificado_como_reembolso():
+    """D2c — comportamento end-to-end via pipeline real."""
+    casos = _dataset_minimo(n=20)
+    casos.append(_caso(
+        101,
+        "ESTORNO COMPRA CANCELADA",
+        "reembolso",
+        diff="hard",
+        esp="imposto_das",
+    ))
+    m = avaliar(casos)
+    assert m.D == 1, f"D={m.D}, esperado 1"
