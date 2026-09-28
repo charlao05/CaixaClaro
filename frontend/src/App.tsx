@@ -14,6 +14,7 @@ import Ingestao from './screens/Ingestao'
 import Revisao from './screens/Revisao'
 import Alertas from './screens/Alertas'
 import Perfil from './screens/Perfil'
+import ListaTransacoes from './screens/ListaTransacoes'
 
 type ViewNaoAutenticado = 'login' | 'register'
 type ViewAutenticado =
@@ -22,6 +23,7 @@ type ViewAutenticado =
   | 'revisao'
   | 'alertas'
   | 'perfil'
+  | 'transacoes'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
@@ -70,28 +72,19 @@ export default function App() {
 
   if (viewAuth === 'ingestao') {
     return (
-      <Ingestao
-        sessao={sessao}
-        onVoltar={() => setViewAuth('dashboard')}
-      />
+      <Ingestao sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
     )
   }
 
   if (viewAuth === 'revisao') {
     return (
-      <Revisao
-        sessao={sessao}
-        onVoltar={() => setViewAuth('dashboard')}
-      />
+      <Revisao sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
     )
   }
 
   if (viewAuth === 'alertas') {
     return (
-      <Alertas
-        sessao={sessao}
-        onVoltar={() => setViewAuth('dashboard')}
-      />
+      <Alertas sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
     )
   }
 
@@ -105,6 +98,15 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'transacoes') {
+    return (
+      <ListaTransacoes
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+      />
+    )
+  }
+
   return (
     <Dashboard
       sessao={sessao}
@@ -113,6 +115,7 @@ export default function App() {
       onRevisar={() => setViewAuth('revisao')}
       onAlertas={() => setViewAuth('alertas')}
       onPerfil={() => setViewAuth('perfil')}
+      onTransacoes={() => setViewAuth('transacoes')}
     />
   )
 }
