@@ -118,3 +118,9 @@ export async function api<T>(
 
   return payload as T
 }
+
+export type Paginado<T> = {
+  itens: T[]
+  next_cursor: string | null
+  has_more: boolean
+}
