@@ -189,7 +189,14 @@ async def colar(
 # POST /importar
 # ============================================================
 
-async def _operacao_importar(conn, user_id: str, formato: str, bruto: bytes, regime: str):
+async def _operacao_importar(
+    conn,
+    user_id: str,
+    formato: str,
+    bruto: bytes,
+    regime: str,
+    alertas_out: list,
+):
     try:
         if formato == "csv":
             lancamentos = parse_csv(bruto)
@@ -201,21 +208,52 @@ async def _operacao_importar(conn, user_id: str, formato: str, bruto: bytes, reg
     import_id = str(_uuid.uuid4())
     uid = _uuid.UUID(user_id)
     importados = 0
+    delta_faturamento = Decimal("0")
+    data_mais_recente: date | None = None
+    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
 
     for i, l in enumerate(lancamentos):
+        rf = processar_lancamento(
+            l.descricao,
+            l.valor,
+            contexto=ctx,
+            cpf_titular_hash=None,
+            cpf_contraparte_hash=None,
+        )
+        cat = rf.guardrail.categoria_corrigida
+        c = rf.classificacao
+
         inserted = await conn.fetchval(
             """
             INSERT INTO transactions
               (user_id, origem, import_id, line_index, data,
-               descricao_bruta, valor)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+               descricao_bruta, valor,
+               categoria, categoria_original,
+               proposito, patrimonio, tratamento_tributario,
+               confianca, needs_review, via, motivo)
+            VALUES ($1, $2, $3, $4, $5, $6, $7,
+                    $8, $8, $9, $10, $11, $12, $13, $14, $15)
             ON CONFLICT DO NOTHING
             RETURNING id
             """,
             uid, formato, import_id, i, l.data, l.descricao, l.valor,
+            cat, c.proposito, c.patrimonio, c.tratamento_tributario,
+            c.confianca, rf.triagem.needs_review, c.via, c.motivo,
         )
+
         if inserted is not None:
             importados += 1
+
+            if conta_faturamento(c.patrimonio, cat):
+                delta_faturamento += Decimal(str(l.valor))
+                if data_mais_recente is None or l.data > data_mais_recente:
+                    data_mais_recente = l.data
+
+    if delta_faturamento > 0 and data_mais_recente is not None:
+        res = await atualizar_fiscal_state(
+            conn, uid, delta_faturamento, data_mais_recente
+        )
+        alertas_out.extend(res.alertas_criados)
 
     rows = await conn.fetch(
         """
@@ -243,7 +281,6 @@ async def _operacao_importar(conn, user_id: str, formato: str, bruto: bytes, reg
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
 
-
 @router.post("/importar", status_code=201)
 async def importar(
     dados: ImportarIn,
@@ -258,9 +295,16 @@ async def importar(
     if not bruto:
         raise erro(400, "ARQUIVO_ILEGIVEL", "Arquivo vazio.")
 
+    alertas_para_enviar: list = []
+
     async def op(conn):
         return await _operacao_importar(
-            conn, str(u["id"]), dados.formato, bruto, u["regime"]
+            conn,
+            str(u["id"]),
+            dados.formato,
+            bruto,
+            u["regime"],
+            alertas_para_enviar,
         )
 
     resposta, status_http = await executar_com_idempotencia(
@@ -270,6 +314,7 @@ async def importar(
         body=dados.model_dump(),
         operacao=op,
     )
+    await enviar_alertas_telegram(u["id"], alertas_para_enviar)
     return JSONResponse(content=resposta, status_code=status_http)
 
 

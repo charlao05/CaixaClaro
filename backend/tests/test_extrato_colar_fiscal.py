@@ -196,3 +196,71 @@ async def test_duas_receitas_somam_no_fiscal_state(client):
 
     estado = json.loads(estado_raw) if isinstance(estado_raw, str) else estado_raw
     assert Decimal(estado["faturamento_acumulado"]) == Decimal("800.00")
+
+
+
+# ============================================================
+# 7. Importacao CSV passa pelo mesmo pipeline fiscal do colar
+# ============================================================
+
+async def test_importar_csv_persiste_classificacao_e_fiscal_state(client):
+    token = await _registrar(
+        client,
+        email="csv-fiscal@x.com",
+        cpf="222.222.222-22",
+    )
+
+    import base64
+
+    csv_bytes = (
+        "data;descricao;valor\n"
+        "25/09/2026;CREDITO LIQUIDO SERVICO AGENCIA DIG LTDA;500,00\n"
+    ).encode("utf-8")
+
+    r = await client.post(
+        "/api/v1/transacoes/importar",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": _key(),
+        },
+        json={
+            "formato": "csv",
+            "conteudo_base64": base64.b64encode(csv_bytes).decode("ascii"),
+        },
+    )
+
+    assert r.status_code == 201, r.json()
+
+    async with conexao() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT categoria, proposito, needs_review
+            FROM transactions
+            WHERE user_id = (
+                SELECT id FROM users WHERE email = 'csv-fiscal@x.com'
+            )
+              AND origem = 'csv'
+            """
+        )
+        estado_raw = await conn.fetchval(
+            """
+            SELECT estado
+            FROM fiscal_state
+            WHERE user_id = (
+                SELECT id FROM users WHERE email = 'csv-fiscal@x.com'
+            )
+            """
+        )
+
+    assert row is not None
+    assert row["categoria"] == "receita_servico"
+    assert row["proposito"] is not None
+    assert row["needs_review"] is False
+
+    assert estado_raw is not None
+    estado = (
+        json.loads(estado_raw)
+        if isinstance(estado_raw, str)
+        else estado_raw
+    )
+    assert Decimal(estado["faturamento_acumulado"]) == Decimal("500.00")
