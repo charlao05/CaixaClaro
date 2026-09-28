@@ -7,9 +7,10 @@ import Register from './screens/Register'
 import Dashboard from './screens/Dashboard'
 import Ingestao from './screens/Ingestao'
 import Revisao from './screens/Revisao'
+import Alertas from './screens/Alertas'
 
 type ViewNaoAutenticado = 'login' | 'register'
-type ViewAutenticado = 'dashboard' | 'ingestao' | 'revisao'
+type ViewAutenticado = 'dashboard' | 'ingestao' | 'revisao' | 'alertas'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
@@ -64,12 +65,22 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'alertas') {
+    return (
+      <Alertas
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+      />
+    )
+  }
+
   return (
     <Dashboard
       sessao={sessao}
       onLogout={handleLogout}
       onNovaIngestao={() => setViewAuth('ingestao')}
       onRevisar={() => setViewAuth('revisao')}
+      onAlertas={() => setViewAuth('alertas')}
     />
   )
 }

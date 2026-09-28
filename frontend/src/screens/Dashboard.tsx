@@ -10,6 +10,7 @@ type Props = {
   onLogout: () => void
   onNovaIngestao: () => void
   onRevisar: () => void
+  onAlertas: () => void
 }
 
 function formatBRL(s: string): string {
@@ -23,6 +24,7 @@ export default function Dashboard({
   onLogout,
   onNovaIngestao,
   onRevisar,
+  onAlertas,
 }: Props) {
   const [resumo, setResumo] = useState<FiscalResumo | null>(null)
   const [alertas, setAlertas] = useState<Alerta[] | null>(null)
@@ -68,6 +70,10 @@ export default function Dashboard({
         <button type="button" onClick={onRevisar}>
           Revisar
           {fila && fila.length > 0 ? ` (${fila.length})` : ''}
+        </button>
+        <button type="button" onClick={onAlertas}>
+          Alertas
+          {alertas && alertas.length > 0 ? ` (${alertas.length})` : ''}
         </button>
         <button type="button" onClick={onLogout}>
           Sair
