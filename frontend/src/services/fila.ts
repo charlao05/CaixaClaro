@@ -25,6 +25,18 @@ export type ListarFilaOpts = {
   cursor?: string
 }
 
+export type ConfirmarResponse = {
+  tx_id: string
+  categoria_antiga: string
+  categoria_nova: string
+  delta_faturamento: string
+  categoria_mudou: boolean
+}
+
+function novaChave(): string {
+  return crypto.randomUUID()
+}
+
 export function listarFila(
   token: string,
   opts: ListarFilaOpts = {},
@@ -35,4 +47,21 @@ export function listarFila(
   const qs = params.toString()
   const path = qs ? `/transacoes/fila?${qs}` : '/transacoes/fila'
   return api<Paginado<ItemFila>>(path, { token })
+}
+
+export function confirmar(
+  token: string,
+  txId: string,
+  categoria?: string | null,
+  idempotencyKey?: string,
+): Promise<ConfirmarResponse> {
+  return api<ConfirmarResponse>(
+    `/transacoes/${txId}/confirmar`,
+    {
+      method: 'PATCH',
+      body: { categoria: categoria ?? null },
+      token,
+      idempotencyKey: idempotencyKey ?? novaChave(),
+    },
+  )
 }
