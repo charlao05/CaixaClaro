@@ -1,10 +1,20 @@
 {$DOMAIN:?definir DOMAIN} {
-	encode gzip
+encode gzip
 
-	log {
-		output stdout
-		format json
-	}
+log {
+output stdout
+format json
+}
 
-	reverse_proxy api:8000
+@backend path /api/* /health /healthz /readyz
+
+handle @backend {
+reverse_proxy api:8000
+}
+
+handle {
+root * /srv/frontend
+try_files {path} /index.html
+file_server
+}
 }

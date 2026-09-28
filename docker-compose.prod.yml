@@ -10,7 +10,7 @@ name: caixaclaro-prod
 # Requer POSTGRES_PASSWORD definida no shell ou em .env na raiz do repo:
 #     $env:POSTGRES_PASSWORD = "<secret>"
 #
-# Nao inclui Caddy, backup ou secrets manager. Esses entram em
+# Nao inclui backup ou secrets manager. Esses entram em
 # incrementos posteriores.
 
 services:
@@ -69,8 +69,11 @@ services:
       migrator:
         condition: service_completed_successfully
 
-  caddy:
-    image: caddy:2-alpine
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: caixaclaro-web:prod
     restart: unless-stopped
     ports:
       - "80:80"
@@ -78,7 +81,6 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?definir DOMAIN}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
