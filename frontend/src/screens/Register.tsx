@@ -89,7 +89,7 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
         </button>
       </form>
       <p>
-        Ja tem conta?{' '}
+        Já tem conta?{' '}
         <button type="button" onClick={onIrParaLogin} disabled={carregando}>
           Entrar
         </button>
