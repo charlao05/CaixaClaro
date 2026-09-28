@@ -94,7 +94,7 @@ export default function Dashboard({ sessao, onLogout }: Props) {
         <p>{(resumo.percentual_consumido * 100).toFixed(1)}% do teto</p>
         {resumo.proxima_faixa ? (
           <p>
-            Proxima faixa: {resumo.proxima_faixa.percentual}% — faltam{' '}
+            Proxima faixa: {(resumo.proxima_faixa.percentual * 100).toFixed(0)}% — faltam{' '}
             {formatBRL(resumo.proxima_faixa.falta)}
           </p>
         ) : (
