@@ -738,3 +738,174 @@ button.tx-item:hover {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.assinatura-nota {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+  margin: 4px 0 12px;
+}
+
+.assinatura-planos {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.assinatura-plano {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.assinatura-plano:hover:not(:disabled) {
+  border-color: #059669;
+  background: #ecfdf5;
+}
+
+.assinatura-plano strong {
+  font-size: 14px;
+  color: #111827;
+}
+
+.assinatura-plano span {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.assinatura-ativa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.assinatura-ativa p {
+  margin: 0;
+}
+
+.assinatura-ativa button {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.assinatura-ativa button:hover:not(:disabled) {
+  border-color: #b45309;
+  background: #fffbeb;
+}
+
+.assinatura-qr {
+  display: block;
+  max-width: 240px;
+  margin: 0 0 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.assinatura-payload {
+  display: block;
+  padding: 10px 12px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  margin-bottom: 12px;
+}
+
+.assinatura-acoes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.assinatura-acoes button {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.assinatura-acoes button:hover:not(:disabled) {
+  border-color: #059669;
+  background: #ecfdf5;
+}
+
+.assinatura-ultimo {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.pagamentos-lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pagamento-item {
+  display: grid;
+  grid-template-columns: 1fr 120px 160px 110px;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  align-items: center;
+}
+
+.pagamento-item:last-child {
+  border-bottom: none;
+}
+
+.pagamento-plano {
+  color: #111827;
+}
+
+.pagamento-valor {
+  font-family: ui-monospace, Consolas, monospace;
+  text-align: right;
+  color: #111827;
+}
+
+.pagamento-status {
+  color: #6b7280;
+}
+
+.pagamento-data {
+  color: #6b7280;
+  font-size: 12px;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .pagamento-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .pagamento-valor,
+  .pagamento-data {
+    text-align: left;
+  }
+}

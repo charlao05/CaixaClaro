@@ -17,6 +17,7 @@ import Perfil from './screens/Perfil'
 import ListaTransacoes from './screens/ListaTransacoes'
 import Opiniao from './screens/Opiniao'
 import Contas from './screens/Contas'
+import Assinatura from './screens/Assinatura'
 
 type ViewNaoAutenticado = 'login' | 'register'
 type ViewAutenticado =
@@ -28,6 +29,7 @@ type ViewAutenticado =
   | 'transacoes'
   | 'opiniao'
   | 'contas'
+  | 'assinatura'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
@@ -136,6 +138,12 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'assinatura') {
+    return (
+      <Assinatura sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
+    )
+  }
+
   return (
     <Dashboard
       sessao={sessao}
@@ -146,6 +154,7 @@ export default function App() {
       onPerfil={() => setViewAuth('perfil')}
       onTransacoes={() => setViewAuth('transacoes')}
       onContas={() => setViewAuth('contas')}
+      onAssinatura={() => setViewAuth('assinatura')}
     />
   )
 }

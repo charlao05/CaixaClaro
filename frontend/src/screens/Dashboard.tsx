@@ -14,6 +14,7 @@ type Props = {
   onPerfil: () => void
   onTransacoes: () => void
   onContas: () => void
+  onAssinatura: () => void
 }
 
 function formatBRL(s: string): string {
@@ -31,6 +32,7 @@ export default function Dashboard({
   onPerfil,
   onTransacoes,
   onContas,
+  onAssinatura,
 }: Props) {
   const [resumo, setResumo] = useState<FiscalResumo | null>(null)
   const [alertas, setAlertas] = useState<Alerta[] | null>(null)
@@ -89,6 +91,9 @@ export default function Dashboard({
         </button>
         <button type="button" onClick={onPerfil}>
           Perfil
+        </button>
+        <button type="button" onClick={onAssinatura}>
+          Assinatura
         </button>
         <button type="button" onClick={onLogout}>
           Sair
