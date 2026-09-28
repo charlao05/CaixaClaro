@@ -66,3 +66,46 @@ button:disabled {
   color: #b00020;
   font-size: 14px;
 }
+
+main.dashboard {
+  display: block;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+main.dashboard header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+main.dashboard header h1 {
+  margin: 0;
+}
+
+main.dashboard header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+main.dashboard section {
+  margin-bottom: 32px;
+}
+
+main.dashboard section h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+main.dashboard ul {
+  padding-left: 20px;
+  margin: 0;
+}
+
+main.dashboard ul li {
+  margin-bottom: 8px;
+}

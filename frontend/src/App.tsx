@@ -4,7 +4,7 @@ import { carregarSessao, limparSessao, type Sessao } from './services/session'
 import { logout as apiLogout } from './services/auth'
 import Login from './screens/Login'
 import Register from './screens/Register'
-import Home from './screens/Home'
+import Dashboard from './screens/Dashboard'
 
 type ViewNaoAutenticado = 'login' | 'register'
 
@@ -41,5 +41,5 @@ export default function App() {
     )
   }
 
-  return <Home usuario={sessao.user} onLogout={handleLogout} />
+  return <Dashboard sessao={sessao} onLogout={handleLogout} />
 }
