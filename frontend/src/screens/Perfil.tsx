@@ -2,7 +2,15 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from '../services/api'
 import type { Sessao } from '../services/session'
 import type { Regime } from '../services/auth'
-import { getPerfil, atualizarPerfil, type Perfil as DadosPerfil } from '../services/perfil'
+import {
+  getPerfil,
+  atualizarPerfil,
+  type Perfil as DadosPerfil,
+} from '../services/perfil'
+import {
+  gerarTokenVinculacao,
+  type TokenVinculacaoResponse,
+} from '../services/telegram'
 
 type Props = {
   sessao: Sessao
@@ -16,10 +24,26 @@ const REGIMES: { id: Regime; label: string }[] = [
   { id: 'PF', label: 'Pessoa Fisica' },
 ]
 
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME
+
 function formatData(iso: string): string {
   const partes = iso.slice(0, 10).split('-')
   if (partes.length !== 3) return iso
   return `${partes[2]}/${partes[1]}/${partes[0]}`
+}
+
+function formatHora(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+function minutosAte(iso: string, agora: number): number {
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return 0
+  return Math.max(0, Math.floor((t - agora) / 60000))
 }
 
 function msgErro(e: unknown): string {
@@ -39,6 +63,14 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
   const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ok, setOk] = useState(false)
+
+  const [tokenResp, setTokenResp] = useState<TokenVinculacaoResponse | null>(null)
+  const [gerandoToken, setGerandoToken] = useState(false)
+  const [erroTelegram, setErroTelegram] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
+  const [verificando, setVerificando] = useState(false)
+  const [msgVerificacao, setMsgVerificacao] = useState<string | null>(null)
+  const [agora, setAgora] = useState(() => Date.now())
 
   useEffect(() => {
     let ativo = true
@@ -66,6 +98,18 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
     return () => clearTimeout(id)
   }, [ok])
 
+  useEffect(() => {
+    if (!copiado) return
+    const id = setTimeout(() => setCopiado(false), 2000)
+    return () => clearTimeout(id)
+  }, [copiado])
+
+  useEffect(() => {
+    if (!tokenResp) return
+    const id = setInterval(() => setAgora(Date.now()), 10000)
+    return () => clearInterval(id)
+  }, [tokenResp])
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setErroSalvar(null)
@@ -84,6 +128,56 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
       setErroSalvar(msgErro(e))
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function handleGerarToken() {
+    setErroTelegram(null)
+    setMsgVerificacao(null)
+    setGerandoToken(true)
+    try {
+      const r = await gerarTokenVinculacao(sessao.token)
+      setTokenResp(r)
+      setAgora(Date.now())
+    } catch (e) {
+      setErroTelegram(msgErro(e))
+    } finally {
+      setGerandoToken(false)
+    }
+  }
+
+  async function handleCopiar() {
+    if (!tokenResp) return
+    try {
+      await navigator.clipboard.writeText(`/start ${tokenResp.token}`)
+      setCopiado(true)
+    } catch {
+      setErroTelegram('Nao foi possivel copiar o comando.')
+    }
+  }
+
+  function handleAbrirTelegram() {
+    if (!tokenResp || !BOT_USERNAME) return
+    const url = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(tokenResp.token)}`
+    window.open(url, '_blank', 'noopener')
+  }
+
+  async function handleVerificar() {
+    setMsgVerificacao(null)
+    setErroTelegram(null)
+    setVerificando(true)
+    try {
+      const p = await getPerfil(sessao.token)
+      setPerfil(p)
+      if (p.telegram_chat_id === null) {
+        setMsgVerificacao(
+          'Ainda nao detectamos a vinculacao. Confirme que enviou /start com o token correto para o bot.',
+        )
+      }
+    } catch (e) {
+      setErroTelegram(msgErro(e))
+    } finally {
+      setVerificando(false)
     }
   }
 
@@ -116,6 +210,10 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
       </main>
     )
   }
+
+  const expirado =
+    tokenResp !== null &&
+    new Date(tokenResp.expira_em).getTime() < agora
 
   return (
     <main className="dashboard">
@@ -159,7 +257,12 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
 
           <label>
             Criado em
-            <input type="text" value={formatData(perfil.criado_em)} readOnly disabled />
+            <input
+              type="text"
+              value={formatData(perfil.criado_em)}
+              readOnly
+              disabled
+            />
           </label>
 
           {erroSalvar && <p role="alert">{erroSalvar}</p>}
@@ -173,6 +276,85 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
             {salvando ? 'Salvando...' : 'Salvar alteracoes'}
           </button>
         </form>
+      </section>
+
+      <section>
+        <h2>Telegram</h2>
+
+        {perfil.telegram_chat_id !== null ? (
+          <div className="telegram-vinculado">
+            <p>
+              <strong>Vinculado</strong> — voce vai receber alertas de
+              faturamento e DAS no Telegram.
+            </p>
+          </div>
+        ) : (
+          <div className="telegram-vincular">
+            <p>
+              Receba alertas de faturamento e DAS no Telegram.
+            </p>
+
+            {erroTelegram && <p role="alert">{erroTelegram}</p>}
+
+            {!tokenResp && (
+              <button
+                type="button"
+                onClick={handleGerarToken}
+                disabled={gerandoToken}
+              >
+                {gerandoToken ? 'Gerando...' : 'Vincular Telegram'}
+              </button>
+            )}
+
+            {tokenResp && (
+              <>
+                <p>
+                  Envie o comando abaixo para o bot{' '}
+                  {BOT_USERNAME && <code>@{BOT_USERNAME}</code>}:
+                </p>
+                <code className="telegram-token">
+                  /start {tokenResp.token}
+                </code>
+
+                <div className="telegram-acoes">
+                  <button type="button" onClick={handleCopiar}>
+                    {copiado ? 'Copiado!' : 'Copiar comando'}
+                  </button>
+                  {BOT_USERNAME && (
+                    <button type="button" onClick={handleAbrirTelegram}>
+                      Abrir Telegram
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleVerificar}
+                    disabled={verificando}
+                  >
+                    {verificando ? 'Verificando...' : 'Ja vinculei — verificar'}
+                  </button>
+                </div>
+
+                {expirado ? (
+                  <p className="telegram-expirado">
+                    Token expirado.{' '}
+                    <button type="button" onClick={handleGerarToken}>
+                      Gerar novo
+                    </button>
+                  </p>
+                ) : (
+                  <p className="telegram-prazo">
+                    Expira as {formatHora(tokenResp.expira_em)} (~
+                    {minutosAte(tokenResp.expira_em, agora)} min)
+                  </p>
+                )}
+
+                {msgVerificacao && (
+                  <p className="telegram-msg">{msgVerificacao}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </section>
     </main>
   )
