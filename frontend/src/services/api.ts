@@ -38,7 +38,18 @@ function extrairErro(status: number, payload: unknown): ApiErrorBody {
 
   if (!payload || typeof payload !== 'object') return fallback
 
-  const detail = (payload as { detail?: unknown }).detail
+  const obj = payload as {
+    detail?: unknown
+    erro?: unknown
+    mensagem?: unknown
+  }
+
+  // FastAPI com exception handler: corpo flat { erro, mensagem }
+  if (typeof obj.erro === 'string' && typeof obj.mensagem === 'string') {
+    return { erro: obj.erro, mensagem: obj.mensagem }
+  }
+
+  const detail = obj.detail
 
   if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
     const d = detail as { erro?: unknown; mensagem?: unknown }
