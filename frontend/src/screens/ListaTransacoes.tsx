@@ -9,6 +9,7 @@ import {
 type Props = {
   sessao: Sessao
   onVoltar: () => void
+  onSelecionar: (txId: string) => void
 }
 
 const LIMITE = 50
@@ -34,7 +35,11 @@ function msgErro(e: unknown): string {
   return 'Erro inesperado.'
 }
 
-export default function ListaTransacoes({ sessao, onVoltar }: Props) {
+export default function ListaTransacoes({
+  sessao,
+  onVoltar,
+  onSelecionar,
+}: Props) {
   const [itens, setItens] = useState<TransacaoCompleta[] | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
@@ -114,16 +119,22 @@ export default function ListaTransacoes({ sessao, onVoltar }: Props) {
           <>
             <ul className="tx-lista">
               {itens.map((t) => (
-                <li key={t.id} className="tx-item">
-                  <span className="tx-data">{formatData(t.data)}</span>
-                  <span className="tx-desc">{t.descricao_bruta}</span>
-                  <span className="tx-valor">{formatBRL(t.valor)}</span>
-                  <span className="tx-cat">
-                    {t.categoria ?? '—'}
-                    {t.needs_review && (
-                      <span className="tx-pend"> pendente</span>
-                    )}
-                  </span>
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    className="tx-item"
+                    onClick={() => onSelecionar(t.id)}
+                  >
+                    <span className="tx-data">{formatData(t.data)}</span>
+                    <span className="tx-desc">{t.descricao_bruta}</span>
+                    <span className="tx-valor">{formatBRL(t.valor)}</span>
+                    <span className="tx-cat">
+                      {t.categoria ?? '—'}
+                      {t.needs_review && (
+                        <span className="tx-pend"> pendente</span>
+                      )}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>

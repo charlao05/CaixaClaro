@@ -15,6 +15,7 @@ import Revisao from './screens/Revisao'
 import Alertas from './screens/Alertas'
 import Perfil from './screens/Perfil'
 import ListaTransacoes from './screens/ListaTransacoes'
+import Opiniao from './screens/Opiniao'
 
 type ViewNaoAutenticado = 'login' | 'register'
 type ViewAutenticado =
@@ -24,11 +25,13 @@ type ViewAutenticado =
   | 'alertas'
   | 'perfil'
   | 'transacoes'
+  | 'opiniao'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
   const [view, setView] = useState<ViewNaoAutenticado>('login')
   const [viewAuth, setViewAuth] = useState<ViewAutenticado>('dashboard')
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
 
   async function handleLogout() {
     if (!sessao) return
@@ -41,6 +44,7 @@ export default function App() {
     setSessao(null)
     setView('login')
     setViewAuth('dashboard')
+    setSelectedTxId(null)
   }
 
   function handleAtualizarUsuario(nome: string | null, regime: Regime) {
@@ -103,6 +107,23 @@ export default function App() {
       <ListaTransacoes
         sessao={sessao}
         onVoltar={() => setViewAuth('dashboard')}
+        onSelecionar={(id) => {
+          setSelectedTxId(id)
+          setViewAuth('opiniao')
+        }}
+      />
+    )
+  }
+
+  if (viewAuth === 'opiniao' && selectedTxId) {
+    return (
+      <Opiniao
+        sessao={sessao}
+        txId={selectedTxId}
+        onVoltar={() => {
+          setSelectedTxId(null)
+          setViewAuth('transacoes')
+        }}
       />
     )
   }
