@@ -1,3 +1,4 @@
+import './App.css'
 import { useState } from 'react'
 import { carregarSessao, limparSessao, type Sessao } from './services/session'
 import { logout as apiLogout } from './services/auth'
