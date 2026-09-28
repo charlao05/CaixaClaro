@@ -19,3 +19,8 @@ pg_data/
 
 # Runtime snapshots
 backend/var/
+
+# Artefatos locais
+openapi-local.json
+# Artefatos locais
+openapi-local.json
