@@ -336,3 +336,58 @@ textarea {
   border-color: #059669;
   background: #ecfdf5;
 }
+
+.perfil-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.perfil-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.perfil-form input,
+.perfil-form select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 15px;
+}
+
+.perfil-form input[readonly] {
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.perfil-form button[type="submit"] {
+  align-self: flex-start;
+  padding: 10px 20px;
+  background: #1f2937;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.perfil-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.perfil-ok {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #065f46;
+  margin: 0;
+}

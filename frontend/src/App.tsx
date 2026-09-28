@@ -1,16 +1,27 @@
 import './App.css'
 import { useState } from 'react'
-import { carregarSessao, limparSessao, type Sessao } from './services/session'
-import { logout as apiLogout } from './services/auth'
+import {
+  carregarSessao,
+  limparSessao,
+  salvarSessao,
+  type Sessao,
+} from './services/session'
+import { logout as apiLogout, type Regime } from './services/auth'
 import Login from './screens/Login'
 import Register from './screens/Register'
 import Dashboard from './screens/Dashboard'
 import Ingestao from './screens/Ingestao'
 import Revisao from './screens/Revisao'
 import Alertas from './screens/Alertas'
+import Perfil from './screens/Perfil'
 
 type ViewNaoAutenticado = 'login' | 'register'
-type ViewAutenticado = 'dashboard' | 'ingestao' | 'revisao' | 'alertas'
+type ViewAutenticado =
+  | 'dashboard'
+  | 'ingestao'
+  | 'revisao'
+  | 'alertas'
+  | 'perfil'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
@@ -28,6 +39,16 @@ export default function App() {
     setSessao(null)
     setView('login')
     setViewAuth('dashboard')
+  }
+
+  function handleAtualizarUsuario(nome: string | null, regime: Regime) {
+    if (!sessao) return
+    const nova: Sessao = {
+      ...sessao,
+      user: { ...sessao.user, nome, regime },
+    }
+    salvarSessao(nova)
+    setSessao(nova)
   }
 
   if (!sessao) {
@@ -74,6 +95,16 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'perfil') {
+    return (
+      <Perfil
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+        onAtualizarUsuario={handleAtualizarUsuario}
+      />
+    )
+  }
+
   return (
     <Dashboard
       sessao={sessao}
@@ -81,6 +112,7 @@ export default function App() {
       onNovaIngestao={() => setViewAuth('ingestao')}
       onRevisar={() => setViewAuth('revisao')}
       onAlertas={() => setViewAuth('alertas')}
+      onPerfil={() => setViewAuth('perfil')}
     />
   )
 }
