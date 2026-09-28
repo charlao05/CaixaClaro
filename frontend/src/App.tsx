@@ -16,6 +16,7 @@ import Alertas from './screens/Alertas'
 import Perfil from './screens/Perfil'
 import ListaTransacoes from './screens/ListaTransacoes'
 import Opiniao from './screens/Opiniao'
+import Contas from './screens/Contas'
 
 type ViewNaoAutenticado = 'login' | 'register'
 type ViewAutenticado =
@@ -26,6 +27,7 @@ type ViewAutenticado =
   | 'perfil'
   | 'transacoes'
   | 'opiniao'
+  | 'contas'
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
@@ -128,6 +130,12 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'contas') {
+    return (
+      <Contas sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
+    )
+  }
+
   return (
     <Dashboard
       sessao={sessao}
@@ -137,6 +145,7 @@ export default function App() {
       onAlertas={() => setViewAuth('alertas')}
       onPerfil={() => setViewAuth('perfil')}
       onTransacoes={() => setViewAuth('transacoes')}
+      onContas={() => setViewAuth('contas')}
     />
   )
 }
