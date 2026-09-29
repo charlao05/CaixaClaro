@@ -38,72 +38,72 @@ def _grau(confianca: float, via: str) -> GrauCerteza:
 
 
 _FATO = {
-    "receita_servico": "Entrada de R$ {valor} referente a servico prestado.",
+    "receita_servico": "Entrada de R$ {valor} referente a serviço prestado.",
     "receita_venda": "Entrada de R$ {valor} referente a venda de produto.",
-    "salario": "Entrada de R$ {valor} referente a salario ou provento.",
-    "imposto_das": "Saida de R$ {valor} para pagamento de tributo.",
-    "taxas_tarifas": "Saida de R$ {valor} referente a tarifa bancaria ou imposto sobre operacao.",
-    "custo_operacional": "Saida de R$ {valor} referente a despesa da atividade.",
-    "transferencia_propria": "Movimentacao de R$ {valor} entre contas proprias.",
-    "pessoal_prolabore": "Saida de R$ {valor} referente a retirada do titular (ponte PF-PJ).",
-    "reembolso": "Entrada de R$ {valor} referente a devolucao ou reembolso.",
-    "emprestimo": "Movimentacao de R$ {valor} referente a emprestimo ou financiamento.",
-    "outros": "Movimentacao de R$ {valor} sem classificacao clara.",
+    "salario": "Entrada de R$ {valor} referente a salário ou provento.",
+    "imposto_das": "Saída de R$ {valor} para pagamento de tributo.",
+    "taxas_tarifas": "Saída de R$ {valor} referente a tarifa bancária ou imposto sobre operação.",
+    "custo_operacional": "Saída de R$ {valor} referente a despesa da atividade.",
+    "transferencia_propria": "Movimentação de R$ {valor} entre contas próprias.",
+    "pessoal_prolabore": "Saída de R$ {valor} referente a retirada do titular (ponte PF-PJ).",
+    "reembolso": "Entrada de R$ {valor} referente a devolução ou reembolso.",
+    "emprestimo": "Movimentação de R$ {valor} referente a empréstimo ou financiamento.",
+    "outros": "Movimentação de R$ {valor} sem classificação clara.",
 }
 
 _INTERP = {
-    "receita_servico": "Compoe faturamento MEI do ano. Sujeito ao teto anual.",
-    "receita_venda": "Compoe faturamento MEI do ano. Sujeito ao teto anual.",
-    "salario": "Renda pessoal. Nao compoe faturamento MEI.",
-    "imposto_das": "Despesa tributaria. Nao compoe faturamento.",
-    "taxas_tarifas": "Custo financeiro. Nao compoe faturamento.",
-    "custo_operacional": "Custo da atividade. Reduz base, nao compoe faturamento.",
-    "transferencia_propria": "Movimentacao neutra. Nao altera renda nem faturamento.",
-    "pessoal_prolabore": "Retirada do titular. Nao e receita da empresa.",
-    "reembolso": "Devolucao de valor. Nao compoe faturamento.",
-    "emprestimo": "Recurso temporario. Nao compoe renda nem faturamento.",
-    "outros": "Sem interpretacao fiscal ate confirmacao.",
+    "receita_servico": "Compõe faturamento MEI do ano. Sujeito ao teto anual.",
+    "receita_venda": "Compõe faturamento MEI do ano. Sujeito ao teto anual.",
+    "salario": "Renda pessoal. Não compõe faturamento MEI.",
+    "imposto_das": "Despesa tributária. Não compõe faturamento.",
+    "taxas_tarifas": "Custo financeiro. Não compõe faturamento.",
+    "custo_operacional": "Custo da atividade. Reduz base, não compõe faturamento.",
+    "transferencia_propria": "Movimentação neutra. Não altera renda nem faturamento.",
+    "pessoal_prolabore": "Retirada do titular. Não é receita da empresa.",
+    "reembolso": "Devolução de valor. Não compõe faturamento.",
+    "emprestimo": "Recurso temporário. Não compõe renda nem faturamento.",
+    "outros": "Sem interpretação fiscal até confirmação.",
 }
 
 _TRATAMENTO = {
     "receita_servico": "Informar no faturamento MEI.",
     "receita_venda": "Informar no faturamento MEI.",
-    "salario": "Declarar como rendimento tributavel no IRPF.",
+    "salario": "Declarar como rendimento tributável no IRPF.",
     "imposto_das": "Despesa dentro do regime MEI.",
     "taxas_tarifas": "Despesa operacional.",
-    "custo_operacional": "Despesa operacional dedutivel.",
+    "custo_operacional": "Despesa operacional dedutível.",
     "transferencia_propria": "Sem efeito fiscal.",
-    "pessoal_prolabore": "Retirada de socio nao tributavel em PF.",
+    "pessoal_prolabore": "Retirada de sócio não tributável em PF.",
     "reembolso": "Sem efeito fiscal.",
     "emprestimo": "Sem efeito fiscal imediato.",
-    "outros": "Indeterminado ate confirmacao.",
+    "outros": "Indeterminado até confirmação.",
 }
 
 _PF_PJ = {
-    "receita_servico": "Prestacao de servico a terceiro (empresarial).",
+    "receita_servico": "Prestação de serviço a terceiro (empresarial).",
     "receita_venda": "Venda a terceiro (empresarial).",
-    "salario": "Renda de pessoa fisica.",
-    "imposto_das": "Obrigacao da atividade empresarial.",
-    "taxas_tarifas": "Custo do negocio.",
-    "custo_operacional": "Custo do negocio.",
-    "transferencia_propria": "Circulacao entre contas do mesmo titular.",
+    "salario": "Renda de pessoa física.",
+    "imposto_das": "Obrigação da atividade empresarial.",
+    "taxas_tarifas": "Custo do negócio.",
+    "custo_operacional": "Custo do negócio.",
+    "transferencia_propria": "Circulação entre contas do mesmo titular.",
     "pessoal_prolabore": "Retirada da empresa para PF do titular.",
-    "reembolso": "Devolucao a PF ou PJ.",
-    "emprestimo": "Obrigacao entre entidades.",
-    "outros": "Relacao PF-PJ indeterminada.",
+    "reembolso": "Devolução a PF ou PJ.",
+    "emprestimo": "Obrigação entre entidades.",
+    "outros": "Relação PF-PJ indeterminada.",
 }
 
 _CONDICAO = {
-    "receita_servico": "Desde que o servico tenha sido efetivamente prestado.",
+    "receita_servico": "Desde que o serviço tenha sido efetivamente prestado.",
     "receita_venda": "Desde que a venda tenha sido efetivada.",
-    "salario": "Desde que o vinculo ou beneficio esteja vigente.",
+    "salario": "Desde que o vínculo ou benefício esteja vigente.",
     "imposto_das": "Desde que o tributo seja devido pela atividade.",
-    "taxas_tarifas": "Aplicavel a operacao bancaria efetivada.",
-    "custo_operacional": "Desde que o gasto seja necessario a atividade.",
-    "transferencia_propria": "Nenhuma condicao adicional.",
-    "pessoal_prolabore": "Desde que o titular seja socio da PJ.",
-    "reembolso": "Nenhuma condicao adicional.",
-    "emprestimo": "Desde que o emprestimo esteja documentado.",
+    "taxas_tarifas": "Aplicável à operação bancária efetivada.",
+    "custo_operacional": "Desde que o gasto seja necessário à atividade.",
+    "transferencia_propria": "Nenhuma condição adicional.",
+    "pessoal_prolabore": "Desde que o titular seja sócio da PJ.",
+    "reembolso": "Nenhuma condição adicional.",
+    "emprestimo": "Desde que o empréstimo esteja documentado.",
     "outros": "Depende de esclarecimento.",
 }
 
@@ -113,9 +113,9 @@ def _opcoes_para(categoria: str) -> list[OpcaoEsclarecimento]:
         return []
     return [
         OpcaoEsclarecimento(
-            label="Trabalho ou servico",
+            label="Trabalho ou serviço",
             proposito="trabalho_servico",
-            descricao="A entrada veio de servico prestado a terceiro.",
+            descricao="A entrada veio de serviço prestado a terceiro.",
         ),
         OpcaoEsclarecimento(
             label="Venda de produto",
@@ -123,12 +123,12 @@ def _opcoes_para(categoria: str) -> list[OpcaoEsclarecimento]:
             descricao="A entrada veio de venda de produto.",
         ),
         OpcaoEsclarecimento(
-            label="Transferencia entre contas proprias",
+            label="Transferência entre contas próprias",
             proposito="transferencia_propria",
-            descricao="A entrada veio de outra conta do proprio titular.",
+            descricao="A entrada veio de outra conta do próprio titular.",
         ),
         OpcaoEsclarecimento(
-            label="Reembolso ou devolucao",
+            label="Reembolso ou devolução",
             proposito="devolucao_reembolso",
             descricao="A entrada devolve valor antes pago.",
         ),
@@ -161,11 +161,11 @@ def generate_tax_opinion(
         )
 
     if tri.needs_review:
-        pendencias = "Classificacao automatica aguarda confirmacao."
-        proximo = "Revisar na fila e confirmar ou corrigir."
+        pendencias = "Classificação automática aguarda confirmação."
+        proximo = "Revisar e confirmar ou corrigir."
     else:
-        pendencias = "Nenhuma pendencia identificada."
-        proximo = "Nenhuma acao necessaria."
+        pendencias = "Nenhuma pendência identificada."
+        proximo = "Nenhuma ação necessária."
 
     grau = _grau(classif.confianca, classif.via)
     opcoes = _opcoes_para(categoria)

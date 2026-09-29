@@ -42,7 +42,7 @@ async def _resolver_customer(conn, user_id: UUID) -> str:
         user_id,
     )
     if row is None:
-        raise erro(404, "USUARIO_NAO_ENCONTRADO", "Usuario nao encontrado.")
+        raise erro(404, "USUARIO_NAO_ENCONTRADO", "Usuário não encontrado.")
     if row["asaas_customer_id"]:
         return row["asaas_customer_id"]
 
@@ -348,7 +348,7 @@ async def processar_webhook_asaas(conn, payload: dict) -> dict:
         raise erro(
             400,
             "WEBHOOK_PAYLOAD_INVALIDO",
-            "event e payment.id obrigatorios.",
+            "event e payment.id obrigatórios.",
         )
 
     payment = await _buscar_payment_duplo_lookup(conn, asaas_id, external_ref)

@@ -79,7 +79,7 @@ def test_fato_cita_valor_formatado():
 
 def test_salario_nao_compoe_faturamento():
     o = _gerar("CREDITO TED FOLHA SALARIO", "4850.00")
-    assert "nao compoe faturamento" in o.interpretacao.lower()
+    assert "não compõe faturamento" in o.interpretacao.lower()
 
 
 def test_emprestimo_tem_tratamento_sem_efeito():
@@ -216,8 +216,8 @@ async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
     )
     assert r.status_code == 200, r.json()
     body = r.json()
-    # A narrativa de fato cita "servico prestado"
-    assert "servico prestado" in body["fato"].lower()
+    # A narrativa de fato cita "serviço prestado"
+    assert "serviço prestado" in body["fato"].lower()
     # Nao caiu em duvida (usuario confirmou, mas confianca/via
     # persistidos podem variar — apenas verifica que NAO e "outros")
     assert "sem classificacao clara" not in body["fato"].lower()
@@ -247,4 +247,5 @@ async def test_opiniao_pos_confirma_sem_idempotency(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert "servico prestado" in body["fato"].lower()
+    assert "serviço prestado" in body["fato"].lower()
+
