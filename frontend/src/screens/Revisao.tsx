@@ -41,7 +41,7 @@ const CATEGORIAS_COMPLETAS: { id: string; label: string }[] = [
   { id: 'receita_servico', label: 'Trabalho / Prestação de Serviço' },
   { id: 'receita_venda', label: 'Vendas de Produtos / Comércio' },
   { id: 'salario', label: 'Salário Formal / Aposentadoria' },
-  { id: 'imposto_das', label: 'Impostos e Tributos (DAS/IRPF/DARF)' },
+  { id: 'imposto_das', label: 'Impostos e tributos' },
   { id: 'taxas_tarifas', label: 'Taxas Bancárias & Maquininha' },
   { id: 'custo_operacional', label: 'Gastos da Atividade / Trabalho' },
   { id: 'transferencia_propria', label: 'Transferência Entre Contas Próprias' },

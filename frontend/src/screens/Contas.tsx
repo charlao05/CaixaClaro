@@ -49,7 +49,7 @@ function msgErro(e: unknown): string {
 }
 
 function labelSync(s: SyncStatus): string {
-  if (s === 'pendente') return 'Na fila'
+  if (s === 'pendente') return 'Aguardando'
   if (s === 'processando') return 'Sincronizando'
   if (s === 'completed') return 'Concluído'
   return 'Falhou'
@@ -150,7 +150,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
     const timeoutId = setTimeout(() => {
       setSyncAtivo(null)
       setErroSync(
-        'Sync ainda nao terminou apos 2 min. Verifique em Transacoes se apareceram novos lancamentos.',
+        'Sincronização ainda não terminou após 2 min. Verifique em Lançamentos se apareceram novos lançamentos.',
       )
     }, TIMEOUT_SYNC_MS)
 
@@ -185,7 +185,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
         },
         onError: (e) => {
           setErroConectar(
-            e && e.message ? e.message : 'Erro no widget Pluggy.',
+            e && e.message ? e.message : 'Não foi possível abrir a conexão bancária.',
           )
         },
         onClose: () => {

@@ -48,7 +48,7 @@ function labelStatusPayment(s: StatusPayment): string {
   if (s === 'confirmado') return 'Confirmado'
   if (s === 'expirado') return 'Expirado'
   if (s === 'falhou') return 'Falhou'
-  return 'Em reconciliacao'
+  return 'Aguardando confirmação'
 }
 
 export default function Assinatura({ sessao, onVoltar }: Props) {
@@ -208,7 +208,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
           <div>
             <p>Você não tem assinatura ativa.</p>
             <p className="assinatura-nota">
-              Valores placeholder do backend; serao definidos antes do lancamento.
+              Valores provisórios; serão definidos antes do lançamento do plano.
             </p>
             <div className="assinatura-planos">
               {PLANOS.map((p) => (

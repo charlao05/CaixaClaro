@@ -158,7 +158,7 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
       </section>
 
       <section>
-        <h2>Importar arquivo (CSV ou OFX)</h2>
+        <h2>Importar arquivo de extrato</h2>
         <form onSubmit={handleImportar}>
           <label>
             Formato
