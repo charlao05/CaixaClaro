@@ -88,6 +88,13 @@ async def resumo(conn, user_id) -> dict:
         user_id,
     )
 
+    tem_transacoes = await conn.fetchval(
+        "SELECT EXISTS("
+        "SELECT 1 FROM transactions WHERE user_id = $1"
+        ")",
+        user_id,
+    )
+
     return {
         "ano_referencia": ano_ref,
         "faturamento_acumulado": str(faturamento),
@@ -107,4 +114,5 @@ async def resumo(conn, user_id) -> dict:
         ],
         "proxima_faixa": proxima,
         "alertas_nao_lidos": alertas_nao_lidos,
+        "tem_transacoes": tem_transacoes,
     }

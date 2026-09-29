@@ -25,6 +25,7 @@ export type FiscalResumo = {
   faixas: FaixaResumo[]
   proxima_faixa: ProximaFaixa | null
   alertas_nao_lidos: number
+  tem_transacoes: boolean
 }
 
 export function getResumo(token: string): Promise<FiscalResumo> {
