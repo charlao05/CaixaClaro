@@ -182,13 +182,13 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
         return False
 
     try:
-        page = 1
+        cursor = None
         total_inseridas = 0
         delta_total = Decimal("0")
         data_mais_recente = None
         while True:
             payload = await pluggy.listar_transactions(
-                sync["provider_account_id"], page=page
+                sync["provider_account_id"], cursor=cursor
             )
             inseridas, delta, data = await _persistir_transacoes(
                 conn,
@@ -202,10 +202,9 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
             if data is not None:
                 if data_mais_recente is None or data > data_mais_recente:
                     data_mais_recente = data
-            total_pages = payload.get("totalPages") or 1
-            if page >= total_pages:
+            cursor = payload.get("next")
+            if not cursor:
                 break
-            page += 1
 
         if delta_total > 0 and data_mais_recente is not None:
             res = await atualizar_fiscal_state(

@@ -96,30 +96,29 @@ async def listar_accounts(item_id: str) -> list:
 
 
 async def listar_transactions(
-    account_id: str, page: int = 1, page_size: int = 500
+    account_id: str, cursor: str | None = None
 ) -> dict:
-    """GET /transactions?accountId={id}. Retorna payload completo da pagina.
+    """GET /v2/transactions?accountId={id}. Paginacao por cursor.
 
-    Devolve {results, total, page, totalPages} — o worker precisa de
-    totalPages para paginar.
+    Retorna {results, next}. 'next' e o cursor da proxima pagina ou None.
     """
     _, _, base = _credenciais()
+    params = {"accountId": account_id}
+    if cursor:
+        params["after"] = cursor
+
     async with httpx.AsyncClient(base_url=base, timeout=30.0) as client:
         api_key = await _obter_api_key(client)
         r = await client.get(
-            "/transactions",
-            params={
-                "accountId": account_id,
-                "page": page,
-                "pageSize": page_size,
-            },
+            "/v2/transactions",
+            params=params,
             headers={"X-API-KEY": api_key},
         )
         if r.status_code != 200:
             raise erro(
                 502,
                 "PLUGGY_TRANSACTIONS_FALHOU",
-                "Falha ao listar transacoes na Pluggy.",
+                f"Falha ao listar transacoes na Pluggy: {r.status_code}",
             )
         return r.json()
 async def revogar_item(item_id: str) -> None:
@@ -146,3 +145,25 @@ async def revogar_item(item_id: str) -> None:
 
 
 
+
+async def registrar_webhook_pluggy(url: str, secret: str) -> dict:
+    """Registra webhook de aplicacao na Pluggy com header customizado."""
+    _, _, base = _credenciais()
+    async with httpx.AsyncClient(base_url=base, timeout=20) as client:
+        api_key = await _obter_api_key(client)
+        r = await client.post(
+            f"{base}/webhooks",
+            headers={"X-API-KEY": api_key},
+            json={
+                "url": url,
+                "event": "all",
+                "headers": {"X-CaixaClaro-Webhook-Secret": secret},
+            },
+        )
+        if r.status_code not in (200, 201):
+            raise erro(
+                502,
+                "PLUGGY_WEBHOOK_FALHOU",
+                f"Falha ao registrar webhook: {r.status_code} {r.text[:200]}",
+            )
+        return r.json()
