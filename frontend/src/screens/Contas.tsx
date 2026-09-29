@@ -51,7 +51,7 @@ function msgErro(e: unknown): string {
 function labelSync(s: SyncStatus): string {
   if (s === 'pendente') return 'Na fila'
   if (s === 'processando') return 'Sincronizando'
-  if (s === 'completed') return 'Concluido'
+  if (s === 'completed') return 'Concluído'
   return 'Falhou'
 }
 
