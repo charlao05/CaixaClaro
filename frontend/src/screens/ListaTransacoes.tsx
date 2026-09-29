@@ -105,14 +105,14 @@ export default function ListaTransacoes({
       {cabecalho}
 
       <section>
-        <h2>Transacoes</h2>
+        <h2>Lançamentos</h2>
 
         {erro && <p role="alert">{erro}</p>}
 
         {!erro && !itens && <p>Carregando...</p>}
 
         {!erro && itens && itens.length === 0 && (
-          <p>Nenhuma transacao registrada.</p>
+          <p>Nenhum lançamento registrado.</p>
         )}
 
         {!erro && itens && itens.length > 0 && (

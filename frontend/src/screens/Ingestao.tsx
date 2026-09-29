@@ -45,7 +45,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 function Resultado({ itens }: { itens: TransacaoResumo[] }) {
-  if (itens.length === 0) return <p>Nenhuma transacao importada.</p>
+  if (itens.length === 0) return <p>Nenhum lançamento importado.</p>
   return (
     <ul>
       {itens.map((t) => (
@@ -151,7 +151,7 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
         </form>
         {resColar && (
           <div>
-            <p>{resColar.importados} transacao(oes) importada(s).</p>
+            <p>{resColar.importados === 1 ? '1 lançamento importado.' : `${resColar.importados} lançamentos importados.`}</p>
             <Resultado itens={resColar.itens} />
           </div>
         )}
@@ -187,7 +187,7 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
         </form>
         {resImportar && (
           <div>
-            <p>{resImportar.importados} transacao(oes) importada(s).</p>
+            <p>{resImportar.importados === 1 ? '1 lançamento importado.' : `${resImportar.importados} lançamentos importados.`}</p>
             <Resultado itens={resImportar.itens} />
           </div>
         )}
