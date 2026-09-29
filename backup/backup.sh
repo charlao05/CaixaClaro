@@ -68,9 +68,9 @@ tar -C "${WORK_DIR}" -cf - caixaclaro | gpg --batch --yes --quiet --pinentry-mod
 
 ( cd "${OUTPUT_DIR}" && sha256sum "${BACKUP_NAME}.tar.gpg" > "${BACKUP_NAME}.tar.gpg.sha256" )
 
-gpg --batch --quiet --pinentry-mode loopback --passphrase-file "${WORK_DIR}/.pass" -d "${OUT}" | tar -tzf - | grep -qx "caixaclaro/MANIFEST.json"
+gpg --batch --quiet --pinentry-mode loopback --passphrase-file "${WORK_DIR}/.pass" -d "${OUT}" | tar -tf - | grep -qx "caixaclaro/MANIFEST.json"
 
-gpg --batch --quiet --pinentry-mode loopback --passphrase-file "${WORK_DIR}/.pass" -d "${OUT}" | tar -xzf - -C "${WORK_DIR}/verify" caixaclaro/db.dump
+gpg --batch --quiet --pinentry-mode loopback --passphrase-file "${WORK_DIR}/.pass" -d "${OUT}" | tar -xf - -C "${WORK_DIR}/verify" caixaclaro/db.dump
 
 pg_restore -l "${WORK_DIR}/verify/caixaclaro/db.dump" > /dev/null
 
