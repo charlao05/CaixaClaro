@@ -215,7 +215,7 @@ O Bloco 3 depende de D1, D2b, D2c, D3 e D5 implementados. Não começa antes.
 ## Referências
 
 - docs/M9.3_DECISAO.md — padrão deste documento
-- docs/M10_DECISAO.md — padrão deste documento
+- docs/M10_DECISAO_2026-08.md — padrão deste documento
 - docs/RECONCILIACAO.md §4 §5 — inventário do protótipo
 - backend/src/caixaclaro/domain/fiscal/taxonomia.py
 - backend/src/caixaclaro/domain/fiscal/classificacao.py

@@ -133,7 +133,7 @@ Critérios:
 ## M10 — Produção
 Critérios:
   - [ ] Deploy em ambiente real
-        DECIDIDO: VPS container-first. Ver docs/M10_DECISAO.md.
+        DECIDIDO: VPS container-first. Ver docs/M10_DECISAO_2026-08.md.
   - [ ] Backup e observabilidade ativos
   - [x] Rollback ensaiado
         ENSAIO MECÂNICO LOCAL: retag da imagem anterior + recreate de api/worker.

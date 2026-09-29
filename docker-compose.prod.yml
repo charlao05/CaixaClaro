@@ -1,6 +1,6 @@
 # docker-compose.prod.yml — M10a.
 #
-# Alvo: VPS container-first (docs/M10_DECISAO.md).
+# Alvo: VPS container-first (docs/M10_DECISAO_2026-08.md).
 #
 # name: isola volume, rede e containers do compose de dev.
 # Sem isso, ambos usam o mesmo projeto (nome do diretorio) e
