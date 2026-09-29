@@ -124,6 +124,19 @@ export default function Dashboard({
     <main className="dashboard">
       {cabecalho}
 
+      {!resumo.tem_transacoes && (
+        <section className="dashboard-onboarding">
+          <h2>Comece pelo seu primeiro extrato</h2>
+          <p>
+            Conecte uma conta ou cole um extrato para importar suas movimentações.
+            Depois, o CaixaClaro organiza os lançamentos e mostra o que precisa da sua revisão.
+          </p>
+          <button type="button" onClick={onNovaIngestao}>
+            Nova ingestão
+          </button>
+        </section>
+      )}
+
       <section>
         <h2>Faturamento {resumo.ano_referencia}</h2>
         <p>
