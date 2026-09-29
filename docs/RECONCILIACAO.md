@@ -1,3 +1,5 @@
+> ⚠️ Algumas tabelas deste documento sao fotografia historica. Frontend existe em `/frontend/` no `main` atual.
+
 # Reconciliação arquitetural (M0)
 
 ## 1. Estado real do repositório
