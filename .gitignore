@@ -23,3 +23,6 @@ backend/var/
 
 # Artefatos locais
 openapi-local.json
+.env
+*.env
+!.env.example
