@@ -18,8 +18,9 @@ import ListaTransacoes from './screens/ListaTransacoes'
 import Opiniao from './screens/Opiniao'
 import Contas from './screens/Contas'
 import Assinatura from './screens/Assinatura'
+import LandingPage from './landing/LandingPage'
 
-type ViewNaoAutenticado = 'login' | 'register'
+type ViewNaoAutenticado = 'landing' | 'login' | 'register'
 type ViewAutenticado =
   | 'dashboard'
   | 'ingestao'
@@ -33,7 +34,7 @@ type ViewAutenticado =
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
-  const [view, setView] = useState<ViewNaoAutenticado>('login')
+  const [view, setView] = useState<ViewNaoAutenticado>('landing')
   const [viewAuth, setViewAuth] = useState<ViewAutenticado>('dashboard')
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
 
@@ -62,6 +63,14 @@ export default function App() {
   }
 
   if (!sessao) {
+    if (view === 'landing') {
+      return (
+        <LandingPage
+          onComecar={() => setView('register')}
+          onEntrar={() => setView('login')}
+        />
+      )
+    }
     if (view === 'register') {
       return (
         <Register

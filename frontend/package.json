@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "lucide-react": "^1.48.0",
     "pluggy-connect-sdk": "^2.14.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
