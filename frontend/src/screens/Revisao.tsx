@@ -169,7 +169,7 @@ export default function Revisao({ sessao, onVoltar }: Props) {
         {cabecalho}
         <section>
           <h2>Tudo verificado e seguro</h2>
-          <p>Nenhuma movimentacao pendente de confirmacao no momento.</p>
+          <p>Nenhuma movimentação pendente de confirmação no momento.</p>
         </section>
       </main>
     )

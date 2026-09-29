@@ -115,7 +115,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
     const timeoutId = setTimeout(() => {
       setAguardandoConta(false)
       setErroConectar(
-        'A conta nao apareceu em 30s. Se voce concluiu a autorizacao no banco, recarregue a pagina.',
+        'A conta não apareceu em 30s. Se você concluiu a autorização no banco, recarregue a página.',
       )
     }, TIMEOUT_CONTA_MS)
 
@@ -202,7 +202,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
 
   async function handleRevogar(contaId: string) {
     const ok = window.confirm(
-      'Revogar esta conexao? As transacoes ja importadas permanecem.',
+      'Revogar esta conexão? As transações já importadas permanecem.',
     )
     if (!ok) return
     setErroConectar(null)
@@ -267,7 +267,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
       {cabecalho}
 
       <section>
-        <h2>Contas bancarias</h2>
+        <h2>Contas bancárias</h2>
 
         {erroConectar && <p role="alert">{erroConectar}</p>}
         {erroSync && <p role="alert">{erroSync}</p>}
