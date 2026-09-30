@@ -561,11 +561,13 @@ async def _operacao_opiniao(conn, user_id, tx_id):
 
     row = await conn.fetchrow(
         """
-        SELECT descricao_bruta, valor, categoria, categoria_original,
-               proposito, patrimonio, tratamento_tributario,
-               confianca, needs_review, via, confirmado_por
-          FROM transactions
-         WHERE id = $1 AND user_id = $2
+        SELECT t.descricao_bruta, t.valor, t.categoria, t.categoria_original,
+               t.proposito, t.patrimonio, t.tratamento_tributario,
+               t.confianca, t.needs_review, t.via, t.confirmado_por,
+               u.regime
+          FROM transactions t
+          JOIN users u ON u.id = t.user_id
+         WHERE t.id = $1 AND t.user_id = $2
         """,
         tx_uuid,
         _uuid.UUID(user_id),
@@ -611,6 +613,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         classif=classif,
         guard=guard,
         tri=tri,
+        regime=row["regime"] or "MEI",
     )
 
     return {

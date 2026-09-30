@@ -142,6 +142,7 @@ def generate_tax_opinion(
     classif: ClassificacaoResultado,
     guard: GuardrailResultado,
     tri: TriagemResultado,
+    regime: str = "MEI",
 ) -> TaxOpinion:
     """Gera TaxOpinion a partir do pipeline fiscal. Deterministico."""
     categoria = guard.categoria_corrigida
@@ -152,6 +153,38 @@ def generate_tax_opinion(
     relacao = _PF_PJ.get(categoria, _PF_PJ["outros"])
     tratamento = _TRATAMENTO.get(categoria, _TRATAMENTO["outros"])
     condicao = _CONDICAO.get(categoria, _CONDICAO["outros"])
+
+    # D5: somente categorias com diferenca material definida no
+    # contrato recebem variante por regime. O restante permanece
+    # deterministico pelo comportamento existente.
+    if regime == "PF":
+        if categoria == "receita_servico":
+            interpretacao = (
+                "Rendimento de pessoa fisica decorrente de trabalho "
+                "nao assalariado. Pode estar sujeito ao carnê-leao."
+            )
+            tratamento = (
+                "Avaliar recolhimento mensal de IRPF pelo carnê-leao "
+                "e declaracao anual, conforme a natureza do rendimento."
+            )
+        elif categoria == "receita_venda":
+            interpretacao = (
+                "Venda realizada por pessoa fisica. O tratamento depende "
+                "de ser alienacao de bem ou atividade habitual de revenda."
+            )
+            tratamento = (
+                "Avaliar o tratamento de ganho de capital ou de atividade "
+                "habitual, conforme a natureza da venda."
+            )
+        elif categoria == "custo_operacional":
+            interpretacao = (
+                "Custo relacionado a atividade de pessoa fisica. "
+                "Pode ser dedutivel no Livro Caixa quando permitido."
+            )
+            tratamento = (
+                "Pode ser deduzido no Livro Caixa quando necessario "
+                "a atividade, permitido pela legislacao e devidamente comprovado."
+            )
 
     if guard.aplicado:
         condicao = (
