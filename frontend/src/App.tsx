@@ -1,5 +1,5 @@
 import './App.css'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   carregarSessao,
   limparSessao,
@@ -32,11 +32,49 @@ type ViewAutenticado =
   | 'contas'
   | 'assinatura'
 
+const VIEW_AUTH_KEY = 'caixaclaro:viewAuth'
+const SELECTED_TX_KEY = 'caixaclaro:selectedTxId'
+
+function isViewAutenticado(value: string | null): value is ViewAutenticado {
+  return (
+    value === 'dashboard' ||
+    value === 'ingestao' ||
+    value === 'revisao' ||
+    value === 'alertas' ||
+    value === 'perfil' ||
+    value === 'transacoes' ||
+    value === 'opiniao' ||
+    value === 'contas' ||
+    value === 'assinatura'
+  )
+}
+
+function carregarViewAuth(): ViewAutenticado {
+  const raw = sessionStorage.getItem(VIEW_AUTH_KEY)
+  return isViewAutenticado(raw) ? raw : 'dashboard'
+}
+
+function carregarSelectedTxId(): string | null {
+  return sessionStorage.getItem(SELECTED_TX_KEY)
+}
+
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
   const [view, setView] = useState<ViewNaoAutenticado>('landing')
-  const [viewAuth, setViewAuth] = useState<ViewAutenticado>('dashboard')
-  const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
+  const [viewAuth, setViewAuth] = useState<ViewAutenticado>(() => carregarViewAuth())
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(() => carregarSelectedTxId())
+
+  useEffect(() => {
+    sessionStorage.setItem(VIEW_AUTH_KEY, viewAuth)
+  }, [viewAuth])
+
+  useEffect(() => {
+    if (selectedTxId === null) {
+      sessionStorage.removeItem(SELECTED_TX_KEY)
+    } else {
+      sessionStorage.setItem(SELECTED_TX_KEY, selectedTxId)
+    }
+  }, [selectedTxId])
 
   async function handleLogout() {
     if (!sessao) return
@@ -50,6 +88,8 @@ export default function App() {
     setView('login')
     setViewAuth('dashboard')
     setSelectedTxId(null)
+    sessionStorage.removeItem(VIEW_AUTH_KEY)
+    sessionStorage.removeItem(SELECTED_TX_KEY)
   }
 
   function handleAtualizarUsuario(nome: string | null, regime: Regime) {
