@@ -72,9 +72,11 @@ export default function Dashboard({
       <h1>CaixaClaro</h1>
       <div>
         <span>{sessao.user.email}</span>
-        <button type="button" onClick={onNovaIngestao}>
-          Adicionar lançamento
-        </button>
+        {resumo?.tem_transacoes && (
+          <button type="button" onClick={onNovaIngestao}>
+            Adicionar lançamento
+          </button>
+        )}
         <button type="button" onClick={onContas}>
           Contas
         </button>
@@ -137,7 +139,7 @@ export default function Dashboard({
         </section>
       )}
 
-      {resumo.tem_transacoes && (
+      {resumo?.tem_transacoes && (
         <section>
           <h2>Seu dinheiro está sendo acompanhado</h2>
           <p>
