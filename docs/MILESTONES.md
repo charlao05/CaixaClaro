@@ -126,9 +126,9 @@ Critérios:
   - [x] Golden dataset versionado em tests/golden/
   - [x] CI roda eval a cada push
   - [x] Resultado publicado em /api/v1/eval/ultima-execucao
-  - [ ] Bateria A–H executada
-        BLOQUEADO: definição operacional não recuperável.
-        Ver docs/M9.3_DECISAO.md §Fora de escopo.
+  - [x] M9.4 fechado conforme contrato operacional em docs/M9.4_CONTRATO.md
+        A–H histórica não recuperável; critérios operacionais atuais,
+        gates 0–8, publicação e consumo do snapshot foram verificados.
 
 ## M10 — Produção
 Critérios:
