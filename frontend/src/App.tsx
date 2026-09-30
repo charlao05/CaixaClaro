@@ -21,6 +21,12 @@ import Assinatura from './screens/Assinatura'
 import LandingPage from './landing/LandingPage'
 
 type ViewNaoAutenticado = 'landing' | 'login' | 'register'
+
+const VIEW_KEY = 'caixaclaro:view'
+
+function isViewNaoAutenticado(value: string | null): value is ViewNaoAutenticado {
+  return value === 'landing' || value === 'login' || value === 'register'
+}
 type ViewAutenticado =
   | 'dashboard'
   | 'ingestao'
@@ -60,7 +66,14 @@ function carregarSelectedTxId(): string | null {
 
 export default function App() {
   const [sessao, setSessao] = useState<Sessao | null>(() => carregarSessao())
-  const [view, setView] = useState<ViewNaoAutenticado>('landing')
+  const [view, setView] = useState<ViewNaoAutenticado>(() => {
+    const salvo = sessionStorage.getItem(VIEW_KEY)
+    return isViewNaoAutenticado(salvo) ? salvo : 'landing'
+  })
+
+  useEffect(() => {
+    sessionStorage.setItem(VIEW_KEY, view)
+  }, [view])
   const [viewAuth, setViewAuth] = useState<ViewAutenticado>(() => carregarViewAuth())
   const [selectedTxId, setSelectedTxId] = useState<string | null>(() => carregarSelectedTxId())
 
