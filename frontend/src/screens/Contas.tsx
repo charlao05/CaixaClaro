@@ -322,7 +322,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
 
         {aguardandoConta && (
           <p className="conta-aguardando">
-            Aguardando confirmacao do banco... a conta aparece assim que a
+            Aguardando confirmação do banco... a conta aparece assim que a
             Pluggy enviar o webhook.
           </p>
         )}

@@ -235,7 +235,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
               <strong>Status:</strong> {sub.status}
             </p>
             <p>
-              <strong>Período:</strong> {formatData(sub.periodo_inicio)} ate{' '}
+              <strong>Período:</strong> {formatData(sub.periodo_inicio)} até{' '}
               {formatData(sub.periodo_fim)}
             </p>
             {sub.pausada_ate && (
@@ -280,7 +280,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
             </>
           )}
           <p className="assinatura-nota">
-            Aguardando confirmacao do pagamento... a tela atualiza sozinha.
+            Aguardando confirmação do pagamento... a tela atualiza sozinha.
           </p>
         </section>
       )}

@@ -284,7 +284,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
         {perfil.telegram_chat_id !== null ? (
           <div className="telegram-vinculado">
             <p>
-              <strong>Vinculado</strong> — voce vai receber alertas de
+              <strong>Vinculado</strong> — você vai receber alertas de
               faturamento e DAS no Telegram.
             </p>
           </div>
