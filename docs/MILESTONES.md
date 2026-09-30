@@ -119,7 +119,9 @@ Critérios:
   - [ ] Motor fiscal não existe no bundle
   - [ ] Maria Silva apenas em modo demonstração
   - [ ] services/api.ts injeta JWT
-        PULADO: nenhum artefato frontend no repositorio atual.
+        Frontend presente no repositorio atual; M8 permanece aberto
+        ate comprovacao dos quatro criterios acima. Ver
+        docs/M8_DECISAO.md.
 
 ## M9 — Eval em CI
 Critérios:
