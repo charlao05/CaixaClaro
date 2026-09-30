@@ -48,7 +48,7 @@ async def buscar_customer_por_cpf(cpf: str) -> dict | None:
                     "asaas_status": r.status_code,
                     "asaas_method": "GET",
                     "asaas_path": "/customers",
-                    "asaas_body_preview": r.text[:500],
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
                 },
             )
             raise erro(
@@ -76,7 +76,7 @@ async def criar_customer(nome: str, cpf: str, email: str) -> dict:
                     "asaas_status": r.status_code,
                     "asaas_method": "POST",
                     "asaas_path": "/customers",
-                    "asaas_body_preview": r.text[:500],
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
                 },
             )
             raise erro(
@@ -103,7 +103,7 @@ async def buscar_pagamento_por_external_reference(ref: str) -> dict | None:
                     "asaas_status": r.status_code,
                     "asaas_method": "GET",
                     "asaas_path": "/payments",
-                    "asaas_body_preview": r.text[:500],
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
                 },
             )
             raise erro(
@@ -153,7 +153,7 @@ async def criar_pagamento_pix(
                     "asaas_status": r.status_code,
                     "asaas_method": "POST",
                     "asaas_path": "/payments",
-                    "asaas_body_preview": r.text[:500],
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
                 },
             )
             raise erro(
@@ -179,7 +179,7 @@ async def buscar_pix_qrcode(payment_id: str) -> dict:
                     "asaas_status": r.status_code,
                     "asaas_method": "GET",
                     "asaas_path": "/payments/{id}/pixQrCode",
-                    "asaas_body_preview": r.text[:500],
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
                 },
             )
             raise erro(
