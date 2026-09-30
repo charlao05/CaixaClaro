@@ -181,11 +181,89 @@ Critérios:
         gates 0–8, publicação e consumo do snapshot foram verificados.
 
 ## M10 — Produção
-Critérios:
-  - [ ] Deploy em ambiente real
-        DECIDIDO: VPS container-first. Ver docs/M10_DECISAO_2026-08.md.
-  - [ ] Backup e observabilidade ativos
-  - [x] Rollback ensaiado
-        ENSAIO MECÂNICO LOCAL: retag da imagem anterior + recreate de api/worker.
-  - [ ] Primeiro usuário real end-to-end
-        ABERTO: via API ou via UI? Depende de M8.
+
+Este milestone foi reestruturado para separar três naturezas que estavam
+misturadas: artefato versionado, ensaio mecânico executado e operação em
+ambiente real. Cada bloco abaixo declara sua natureza e o tipo de evidência
+que o fecha.
+
+> Nota de nomenclatura: a divisão M10a/M10b usada em
+> docs/M10_DECISAO_2026-08.md é histórica e pertence à decisão
+> arquitetural. Não corresponde diretamente à divisão atual M10.A/B/C,
+> que é a estrutura de aceite/evidência adotada aqui.
+
+### M10.A — Artefatos versionados no repositório (natureza A)
+
+Critérios verificáveis por `arquivo:linha` no repositório.
+
+- [x] Compose de produção define db, migrator, api, worker, web
+      evidência: docker-compose.prod.yml
+- [x] Migrations rodam como serviço one-shot do compose, não no entrypoint da API
+      evidência: docker-compose.prod.yml (serviço migrator) +
+      backend/src/caixaclaro/migration_runner.py
+- [x] Caddyfile roteia /api/*, /healthz, /readyz
+      evidência: Caddyfile
+- [x] GET /healthz (liveness) existe
+      evidência: backend/src/caixaclaro/main.py
+- [x] GET /readyz (readiness) verifica pool PostgreSQL
+      evidência: backend/src/caixaclaro/main.py
+- [x] Logging JSON estruturado existe e é testado
+      evidência: backend/src/caixaclaro/logging_config.py +
+      backend/tests/test_logging_config.py
+- [x] Webhooks Pluggy/Asaas/Telegram verificam tokens nos headers
+      evidência: backend/src/caixaclaro/api/webhooks.py
+- [x] Scripts de backup e restore existem, com Dockerfile dedicado
+      evidência: backup/backup.sh, backup/backup-vps.sh, backup/backup.ps1,
+      backup/restore.ps1, backup/restore-funcional.ps1, backup/Dockerfile
+
+### M10.B — Ensaios mecânicos executados (natureza B)
+
+Fecham quando houver registro rastreável no repositório: data, comando e
+saída, em docs/ ou backup/.
+
+- [~] Rollback ensaiado (retag da imagem anterior + recreate de api/worker)
+      DECLARADO: MILESTONES.md registrava [x] "ENSAIO MECÂNICO LOCAL".
+      RESSALVA: não há artefato, log ou registro rastreável do ensaio no
+      repositório. Rebaixado de [x] para [~] pela mesma disciplina
+      probatória aplicada ao M0 e ao M8: DECLARADO ≠ COMPROVADO.
+      Para promover a [x]: registrar data, comandos e saída do ensaio.
+- [ ] Restore funcional ensaiado a partir de um backup real
+      backup/restore-funcional.ps1 existe, mas sem registro de execução
+      contra artefato .tar.gpg real.
+
+### M10.C — Operação em ambiente real (natureza C)
+
+Critérios que exigem evidência do ambiente real. O repositório pode
+registrar essa evidência, mas não substitui a execução. Permanecem NÃO
+COMPROVADOS enquanto tal evidência não existir.
+
+- [ ] Deploy em VPS/host real
+      Requer: host provisionado, docker compose -f docker-compose.prod.yml up
+      executado, TLS emitido por Let's Encrypt, webhooks acessíveis
+      publicamente. NÃO COMPROVADO NO REPOSITÓRIO.
+- [ ] Backup em execução agendada em produção
+      Requer: cron/systemd timer no host invocando backup-vps.sh e
+      artefatos .tar.gpg em storage remoto. NÃO COMPROVADO NO REPOSITÓRIO.
+- [ ] Observabilidade ativa em produção
+      Mecanismos existem e são testados (M10.A). "Ativa" exige coleta
+      real de logs e alerta funcional quando /readyz cai.
+      NÃO COMPROVADO NO REPOSITÓRIO.
+- [ ] Primeiro usuário real end-to-end
+      Requer registro via UI ou API em produção, com uso real registrado.
+      M8 (fechado em 17f2fa1) deixou de ser bloqueio técnico. Permanece
+      dependência operacional. NÃO COMPROVADO NO REPOSITÓRIO.
+
+### Notas
+
+- Naturezas A e B podem ser comprovadas por evidência versionada no
+  repositório. Natureza C exige evidência do ambiente real; o repositório
+  pode registrar essa evidência, mas não substitui a execução real.
+- O critério "Backup e observabilidade ativos" foi quebrado em três
+  critérios por natureza: artefatos existem (M10.A), ensaios executados
+  (M10.B), operação real (M10.C).
+- O [x] original de "Rollback ensaiado" foi rebaixado a [~] pela mesma
+  disciplina probatória aplicada ao M0 e ao M8.
+- Deploy automatizado permanece fora de escopo por decisão consciente
+  (docs/M10_DECISAO_2026-08.md, seção "Fora de escopo").
+
+Ver docs/M10_DECISAO_2026-08.md para topologia e decisões de arquitetura.
