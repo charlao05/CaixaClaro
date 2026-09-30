@@ -95,7 +95,8 @@ Critérios:
   - [x] user_id do payment local (não do evento)
   - [x] PAYMENT_CONFIRMED × 5 estados de payment (matriz completa)
   - [x] Política B (confirmação tardia) auditada
-  - [~] 4 testes de aceite de B11/B12 — PENDENTE: definicao perdida em compactacao (c3ec0fc)
+  - [x] B11/B12 nominal nao recuperavel; criterios do bloco M5 cobertos
+        por testes nomeados em test_billing.py e test_webhook_asaas.py.
   - [x] corrida entre workers e crash após POST sem persistência de ID provados
 
 ## M6 — Workers
