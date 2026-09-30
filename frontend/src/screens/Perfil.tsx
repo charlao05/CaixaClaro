@@ -285,13 +285,13 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
           <div className="telegram-vinculado">
             <p>
               <strong>Conectado</strong> — você vai receber alertas de
-              faturamento e DAS no Telegram.
+              faturamento e do boleto mensal do MEI (DAS) no Telegram.
             </p>
           </div>
         ) : (
           <div className="telegram-vincular">
             <p>
-              Receba alertas de faturamento e DAS no Telegram.
+              Receba alertas de faturamento e do boleto mensal do MEI (DAS) no Telegram.
             </p>
 
             {erroTelegram && <p role="alert">{erroTelegram}</p>}
