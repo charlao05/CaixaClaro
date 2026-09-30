@@ -6,12 +6,15 @@ Sem retry, sem cache.
 
 Contrato: docs/CONTRATO_API.md secao "Billing".
 """
+import logging
 from decimal import Decimal
 
 import httpx
 
 from ..config import settings
 from ..security.erros import erro
+
+logger = logging.getLogger(__name__)
 
 
 def _config() -> tuple[str, str]:
@@ -39,6 +42,15 @@ async def buscar_customer_por_cpf(cpf: str) -> dict | None:
             headers=_headers(api_key),
         )
         if r.status_code != 200:
+            logger.warning(
+                "asaas_customer_buscar_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "GET",
+                    "asaas_path": "/customers",
+                    "asaas_body_preview": r.text[:500],
+                },
+            )
             raise erro(
                 502,
                 "ASAAS_CUSTOMER_BUSCAR_FALHOU",
@@ -58,6 +70,15 @@ async def criar_customer(nome: str, cpf: str, email: str) -> dict:
             json={"name": nome, "cpfCnpj": cpf, "email": email},
         )
         if r.status_code not in (200, 201):
+            logger.warning(
+                "asaas_customer_criar_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "POST",
+                    "asaas_path": "/customers",
+                    "asaas_body_preview": r.text[:500],
+                },
+            )
             raise erro(
                 502,
                 "ASAAS_CUSTOMER_CRIAR_FALHOU",
@@ -76,6 +97,15 @@ async def buscar_pagamento_por_external_reference(ref: str) -> dict | None:
             headers=_headers(api_key),
         )
         if r.status_code != 200:
+            logger.warning(
+                "asaas_payment_buscar_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "GET",
+                    "asaas_path": "/payments",
+                    "asaas_body_preview": r.text[:500],
+                },
+            )
             raise erro(
                 502,
                 "ASAAS_PAYMENT_BUSCAR_FALHOU",
@@ -117,6 +147,15 @@ async def criar_pagamento_pix(
             },
         )
         if r.status_code not in (200, 201):
+            logger.warning(
+                "asaas_payment_criar_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "POST",
+                    "asaas_path": "/payments",
+                    "asaas_body_preview": r.text[:500],
+                },
+            )
             raise erro(
                 502,
                 "ASAAS_PAYMENT_CRIAR_FALHOU",
@@ -134,6 +173,15 @@ async def buscar_pix_qrcode(payment_id: str) -> dict:
             headers=_headers(api_key),
         )
         if r.status_code != 200:
+            logger.warning(
+                "asaas_pix_qr_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "GET",
+                    "asaas_path": "/payments/{id}/pixQrCode",
+                    "asaas_body_preview": r.text[:500],
+                },
+            )
             raise erro(
                 502,
                 "ASAAS_PIX_QR_FALHOU",
