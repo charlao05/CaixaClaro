@@ -178,9 +178,9 @@ async def test_worker_processa_sync_e_persiste_transacoes(client, monkeypatch):
     assert r.status_code == 202, r.json()
     sync_id = r.json()["sync_id"]
 
-    async def listar_transactions(account_id_provider, page=1, page_size=500):
+    async def listar_transactions(account_id_provider, cursor=None):
         assert account_id_provider == "acc-worker-1"
-        assert page == 1
+        assert cursor is None
         return {
             "results": [
                 {
@@ -196,9 +196,7 @@ async def test_worker_processa_sync_e_persiste_transacoes(client, monkeypatch):
                     "amount": 150.00,
                 },
             ],
-            "total": 2,
-            "page": 1,
-            "totalPages": 1,
+            "next": None,
         }
 
     monkeypatch.setattr(
@@ -259,12 +257,12 @@ async def test_worker_processa_sync_paginado(client, monkeypatch):
     assert r.status_code == 202
     sync_id = r.json()["sync_id"]
 
-    paginas = []
+    cursores = []
 
-    async def listar_transactions(account_id_provider, page=1, page_size=500):
-        paginas.append(page)
+    async def listar_transactions(account_id_provider, cursor=None):
+        cursores.append(cursor)
         assert account_id_provider == "acc-worker-2"
-        if page == 1:
+        if cursor is None:
             return {
                 "results": [
                     {
@@ -274,9 +272,7 @@ async def test_worker_processa_sync_paginado(client, monkeypatch):
                         "amount": -10.00,
                     }
                 ],
-                "total": 2,
-                "page": 1,
-                "totalPages": 2,
+                "next": "cursor-2",
             }
         return {
             "results": [
@@ -287,9 +283,7 @@ async def test_worker_processa_sync_paginado(client, monkeypatch):
                     "amount": 20.00,
                 }
             ],
-            "total": 2,
-            "page": 2,
-            "totalPages": 2,
+            "next": None,
         }
 
     monkeypatch.setattr(
@@ -346,13 +340,11 @@ async def test_worker_claim_exclusao_mutua(client, monkeypatch):
 
     chamadas = []
 
-    async def listar_transactions(acc, page=1, page_size=500):
-        chamadas.append(page)
+    async def listar_transactions(acc, cursor=None):
+        chamadas.append(cursor)
         return {
             "results": [],
-            "total": 0,
-            "page": 1,
-            "totalPages": 1,
+            "next": None,
         }
 
     monkeypatch.setattr(
@@ -384,7 +376,7 @@ async def test_worker_falha_pluggy_marca_failed(client, monkeypatch):
     )
     sync_id = r.json()["sync_id"]
 
-    async def listar_transactions(acc, page=1, page_size=500):
+    async def listar_transactions(acc, cursor=None):
         raise HTTPException(
             status_code=502,
             detail={"erro": "PLUGGY_TRANSACTIONS_FALHOU", "mensagem": "x"},
@@ -454,7 +446,7 @@ async def test_worker_idempotente_nao_duplica_transactions(client, monkeypatch):
         "666.666.660-70", "acc-idem", "item-idem",
     )
 
-    async def listar_transactions(acc, page=1, page_size=500):
+    async def listar_transactions(acc, cursor=None):
         return {
             "results": [
                 {
@@ -470,9 +462,7 @@ async def test_worker_idempotente_nao_duplica_transactions(client, monkeypatch):
                     "amount": 20.00,
                 },
             ],
-            "total": 2,
-            "page": 1,
-            "totalPages": 1,
+            "next": None,
         }
 
     monkeypatch.setattr(
