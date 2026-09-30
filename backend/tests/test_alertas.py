@@ -5,7 +5,7 @@ from decimal import Decimal
 from caixaclaro.db import conexao
 
 
-async def _registrar(client, email="al@x.com", cpf="111.111.111-11"):
+async def _registrar(client, email="al@x.com", cpf="111.444.777-35"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -54,7 +54,7 @@ async def test_alertas_vazio(client):
 
 
 async def test_alertas_lista_shape(client):
-    token = await _registrar(client, email="al2@x.com", cpf="222.222.222-22")
+    token = await _registrar(client, email="al2@x.com", cpf="222.222.220-60")
     await _criar_alerta_60(client, token)
 
     r = await client.get(
@@ -76,7 +76,7 @@ async def test_alertas_lista_shape(client):
 
 
 async def test_alertas_apenas_nao_lidos(client):
-    token = await _registrar(client, email="al3@x.com", cpf="333.333.333-33")
+    token = await _registrar(client, email="al3@x.com", cpf="333.333.330-90")
     await _criar_alerta_60(client, token)
 
     async with conexao() as conn:
@@ -108,7 +108,7 @@ async def test_alertas_cursor_e_has_more(client):
     token = await _registrar(
         client,
         email="cur_alertas@x.com",
-        cpf="303.303.303-30",
+        cpf="303.303.303-22",
     )
 
     # R$ 100.000 cruza 60%, 80%, 90%, 95%, 100% e 120%:
@@ -171,7 +171,7 @@ async def test_alertas_cursor_malformado_400(client):
     token = await _registrar(
         client,
         email="cur_alertas2@x.com",
-        cpf="404.404.404-40",
+        cpf="404.404.404-08",
     )
 
     r = await client.get(
@@ -182,7 +182,7 @@ async def test_alertas_cursor_malformado_400(client):
 
 
 async def test_alertas_filtro_tipo(client):
-    token = await _registrar(client, email="al4@x.com", cpf="444.444.444-44")
+    token = await _registrar(client, email="al4@x.com", cpf="444.444.440-10")
     await _criar_alerta_60(client, token)
 
     r = await client.get(
@@ -204,7 +204,7 @@ async def test_alertas_filtro_tipo(client):
 # ============================================================
 
 async def test_marcar_lido_idempotente(client):
-    token = await _registrar(client, email="al5@x.com", cpf="555.555.555-55")
+    token = await _registrar(client, email="al5@x.com", cpf="555.555.550-40")
     await _criar_alerta_60(client, token)
 
     async with conexao() as conn:
@@ -228,7 +228,7 @@ async def test_marcar_lido_idempotente(client):
 
 
 async def test_marcar_lido_404_inexistente(client):
-    token = await _registrar(client, email="al6@x.com", cpf="666.666.666-66")
+    token = await _registrar(client, email="al6@x.com", cpf="666.666.660-70")
     r = await client.post(
         "/api/v1/transacoes/alertas/00000000-0000-0000-0000-000000000000/lido",
         headers={"Authorization": f"Bearer {token}"},
@@ -237,7 +237,7 @@ async def test_marcar_lido_404_inexistente(client):
 
 
 async def test_marcar_lido_400_id_invalido(client):
-    token = await _registrar(client, email="al7@x.com", cpf="777.777.777-77")
+    token = await _registrar(client, email="al7@x.com", cpf="777.777.770-09")
     r = await client.post(
         "/api/v1/transacoes/alertas/nao-uuid/lido",
         headers={"Authorization": f"Bearer {token}"},
@@ -246,8 +246,8 @@ async def test_marcar_lido_400_id_invalido(client):
 
 
 async def test_marcar_lido_isolamento_por_usuario(client):
-    token_a = await _registrar(client, email="ala@x.com", cpf="888.888.888-88")
-    token_b = await _registrar(client, email="alb@x.com", cpf="999.999.999-99")
+    token_a = await _registrar(client, email="ala@x.com", cpf="888.888.880-20")
+    token_b = await _registrar(client, email="alb@x.com", cpf="999.999.990-50")
 
     await _criar_alerta_60(client, token_a)
     async with conexao() as conn:
@@ -272,7 +272,7 @@ async def test_alertas_sem_jwt_401(client):
 # ============================================================
 
 async def test_fila_cursor_e_has_more(client):
-    token = await _registrar(client, email="cur@x.com", cpf="101.101.101-10")
+    token = await _registrar(client, email="cur@x.com", cpf="101.101.102-69")
 
     # Cola 5 entradas genericas -> 5 na fila
     texto = (
@@ -319,7 +319,7 @@ async def test_fila_cursor_e_has_more(client):
 
 
 async def test_fila_cursor_malformado_400(client):
-    token = await _registrar(client, email="cur2@x.com", cpf="202.202.202-20")
+    token = await _registrar(client, email="cur2@x.com", cpf="202.202.202-55")
     r = await client.get(
         "/api/v1/transacoes/fila?cursor=nao-e-base64-valido!!",
         headers={"Authorization": f"Bearer {token}"},

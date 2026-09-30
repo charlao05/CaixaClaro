@@ -62,7 +62,7 @@ async def _post_asaas(client, event, asaas_id, external_ref, event_id=None):
 
 
 async def test_webhook_confirma_pendente_e_concede_periodo(client):
-    uid = await _registrar(client, "wh1@x.com", "211.211.211-21")
+    uid = await _registrar(client, "wh1@x.com", "211.211.211-28")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="pendente")
 
@@ -88,7 +88,7 @@ async def test_webhook_confirma_pendente_e_concede_periodo(client):
 
 
 async def test_webhook_politica_b_expirado_confirma(client):
-    uid = await _registrar(client, "wh2@x.com", "212.212.212-22")
+    uid = await _registrar(client, "wh2@x.com", "212.212.212-99")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="expirado")
 
@@ -106,7 +106,7 @@ async def test_webhook_politica_b_expirado_confirma(client):
 
 
 async def test_webhook_idempotente_confirmado(client):
-    uid = await _registrar(client, "wh3@x.com", "213.213.213-23")
+    uid = await _registrar(client, "wh3@x.com", "213.213.213-50")
     async with conexao() as conn:
         await _criar_payment(conn, uid, status="confirmado")
         await conn.execute(
@@ -131,7 +131,7 @@ async def test_webhook_idempotente_confirmado(client):
 
 
 async def test_webhook_duplo_lookup_por_asaas_id(client):
-    uid = await _registrar(client, "wh4@x.com", "214.214.214-24")
+    uid = await _registrar(client, "wh4@x.com", "214.214.214-10")
     async with conexao() as conn:
         await _criar_payment(conn, uid, status="pendente", asaas_id="pay_lookup_1")
 
@@ -141,7 +141,7 @@ async def test_webhook_duplo_lookup_por_asaas_id(client):
 
 
 async def test_webhook_duplo_lookup_por_external_ref(client):
-    uid = await _registrar(client, "wh5@x.com", "215.215.215-25")
+    uid = await _registrar(client, "wh5@x.com", "215.215.215-81")
     async with conexao() as conn:
         _, ref = await _criar_payment(
             conn, uid, status="pendente", asaas_id=None, external_ref="ref-so"
@@ -157,7 +157,7 @@ async def test_webhook_duplo_lookup_por_external_ref(client):
 
 
 async def test_webhook_payment_nao_encontrado_retorna_ok(client):
-    await _registrar(client, "wh6@x.com", "216.216.216-26")
+    await _registrar(client, "wh6@x.com", "216.216.216-42")
     r = await _post_asaas(
         client, "PAYMENT_CONFIRMED", "pay_fantasma", "ref-fantasma"
     )
@@ -168,7 +168,7 @@ async def test_webhook_payment_nao_encontrado_retorna_ok(client):
 
 
 async def test_webhook_event_id_duplicado_nao_reprocessa(client):
-    uid = await _registrar(client, "wh7@x.com", "217.217.217-27")
+    uid = await _registrar(client, "wh7@x.com", "217.217.217-03")
     async with conexao() as conn:
         await _criar_payment(conn, uid, status="pendente")
 
@@ -194,7 +194,7 @@ async def test_webhook_payload_invalido_400(client):
 
 
 async def test_webhook_payment_overdue_marca_expirado(client):
-    uid = await _registrar(client, "wh8@x.com", "218.218.218-28")
+    uid = await _registrar(client, "wh8@x.com", "218.218.218-74")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="pendente")
 
@@ -210,7 +210,7 @@ async def test_webhook_payment_overdue_marca_expirado(client):
 
 
 async def test_webhook_payment_received_confirma(client):
-    uid = await _registrar(client, "wh9@x.com", "219.219.219-29")
+    uid = await _registrar(client, "wh9@x.com", "219.219.219-35")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="pendente")
 
@@ -224,7 +224,7 @@ async def test_webhook_confirma_pendente_reconciliacao(client):
 
     Cenario do crash pos-POST que a reconciliacao do Asaas resolve.
     """
-    uid = await _registrar(client, "wh10@x.com", "220.220.220-20")
+    uid = await _registrar(client, "wh10@x.com", "220.220.220-09")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="pendente_reconciliacao")
 
@@ -251,7 +251,7 @@ async def test_webhook_confirma_falhou(client):
     O Asaas diz que foi pago; nosso 'falhou' era erro interno.
     A verdade do dinheiro vem do provedor.
     """
-    uid = await _registrar(client, "wh11@x.com", "221.221.221-21")
+    uid = await _registrar(client, "wh11@x.com", "221.221.221-61")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="falhou")
 
@@ -278,8 +278,8 @@ async def test_webhook_user_id_do_payload_e_ignorado(client):
     user_id vem SEMPRE do payment local. Se alguem um dia adicionar
     lookup de user_id no payload, este teste quebra.
     """
-    uid_real = await _registrar(client, "forj1@x.com", "411.411.411-41")
-    uid_forjado = await _registrar(client, "forj2@x.com", "412.412.412-42")
+    uid_real = await _registrar(client, "forj1@x.com", "411.411.411-40")
+    uid_forjado = await _registrar(client, "forj2@x.com", "412.412.412-01")
 
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid_real, status="pendente")
@@ -313,7 +313,7 @@ async def test_webhook_politica_b_grava_audit(client):
 
     Prova que a auditoria e efetivamente registrada, nao so o retorno.
     """
-    uid = await _registrar(client, "audit-b@x.com", "413.413.413-43")
+    uid = await _registrar(client, "audit-b@x.com", "413.413.413-72")
     async with conexao() as conn:
         _, ref = await _criar_payment(conn, uid, status="expirado")
 

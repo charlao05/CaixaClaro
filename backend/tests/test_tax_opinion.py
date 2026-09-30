@@ -91,7 +91,7 @@ def test_emprestimo_tem_tratamento_sem_efeito():
 # Endpoint
 # ============================================================
 
-async def _registrar(client, email="op@x.com", cpf="777.777.777-77"):
+async def _registrar(client, email="op@x.com", cpf="777.777.770-09"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -138,7 +138,7 @@ async def test_endpoint_opiniao_schema_completo(client):
 
 
 async def test_endpoint_opiniao_404(client):
-    token = await _registrar(client, email="op2@x.com", cpf="888.888.888-88")
+    token = await _registrar(client, email="op2@x.com", cpf="888.888.880-20")
     r = await client.get(
         "/api/v1/transacoes/00000000-0000-0000-0000-000000000000/opiniao",
         headers={"Authorization": f"Bearer {token}"},
@@ -154,8 +154,8 @@ async def test_endpoint_opiniao_sem_jwt_401(client):
 
 
 async def test_endpoint_opiniao_isolamento_404(client):
-    token_a = await _registrar(client, email="opa@x.com", cpf="111.111.111-11")
-    token_b = await _registrar(client, email="opb@x.com", cpf="222.222.222-22")
+    token_a = await _registrar(client, email="opa@x.com", cpf="111.444.777-35")
+    token_b = await _registrar(client, email="opb@x.com", cpf="222.222.220-60")
 
     await client.post(
         "/api/v1/transacoes/extrato/colar",
@@ -182,7 +182,7 @@ async def test_endpoint_opiniao_isolamento_404(client):
 async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
     """Usuario cola PIX (cai em outros), confirma receita_servico,
     GET /opiniao deve refletir a categoria confirmada — nao a inicial."""
-    token = await _registrar(client, email="n9@x.com", cpf="999.999.999-99")
+    token = await _registrar(client, email="n9@x.com", cpf="999.999.990-50")
 
     r = await client.post(
         "/api/v1/transacoes/extrato/colar",
@@ -228,7 +228,7 @@ async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
 async def test_opiniao_pos_confirma_sem_idempotency(client):
     """Prova que a leitura nao passa por recomputo — mesmo sem
     Idempotency-Key, GET /opiniao funciona e reflete persistencia."""
-    token = await _registrar(client, email="n9b@x.com", cpf="101.101.101-10")
+    token = await _registrar(client, email="n9b@x.com", cpf="101.101.102-69")
 
     await client.post(
         "/api/v1/transacoes/extrato/colar",

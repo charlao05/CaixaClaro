@@ -7,7 +7,7 @@ import uuid
 from caixaclaro.db import conexao
 
 
-async def _registrar(client, email="fila@x.com", cpf="222.222.222-22"):
+async def _registrar(client, email="fila@x.com", cpf="222.222.220-60"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -87,8 +87,8 @@ async def test_fila_ordena_criado_em_desc(client):
 
 
 async def test_fila_isolamento_por_usuario(client):
-    token_a = await _registrar(client, email="a@x.com", cpf="111.111.111-11")
-    token_b = await _registrar(client, email="b@x.com", cpf="333.333.333-33")
+    token_a = await _registrar(client, email="a@x.com", cpf="111.444.777-35")
+    token_b = await _registrar(client, email="b@x.com", cpf="333.333.330-90")
 
     await _colar(client, token_a, "25/09 PIX RECEBIDO JOAO R$ 100,00")
 

@@ -54,7 +54,7 @@ async def _criar_conta(client, monkeypatch, email, cpf, acc_id, item_id):
 
 async def test_iniciar_sync_cria_pendente(client, monkeypatch):
     token, user_id, account_id = await _criar_conta(
-        client, monkeypatch, "sync1@x.com", "111.111.111-11", "acc-s1", "item-s1"
+        client, monkeypatch, "sync1@x.com", "111.444.777-35", "acc-s1", "item-s1"
     )
     async with conexao() as conn:
         await conn.execute(
@@ -74,7 +74,7 @@ async def test_iniciar_sync_cria_pendente(client, monkeypatch):
 
 async def test_iniciar_sync_reusa_pendente_existente(client, monkeypatch):
     token, _, account_id = await _criar_conta(
-        client, monkeypatch, "sync2@x.com", "222.222.222-22", "acc-s2", "item-s2"
+        client, monkeypatch, "sync2@x.com", "222.222.220-60", "acc-s2", "item-s2"
     )
     headers = {"Authorization": f"Bearer {token}"}
     r1 = await client.post(f"/api/v1/contas/{account_id}/sync", headers=headers)
@@ -86,7 +86,7 @@ async def test_iniciar_sync_reusa_pendente_existente(client, monkeypatch):
 
 async def test_consultar_sync_200(client, monkeypatch):
     token, _, account_id = await _criar_conta(
-        client, monkeypatch, "sync3@x.com", "333.333.333-33", "acc-s3", "item-s3"
+        client, monkeypatch, "sync3@x.com", "333.333.330-90", "acc-s3", "item-s3"
     )
     headers = {"Authorization": f"Bearer {token}"}
     r = await client.post(f"/api/v1/contas/{account_id}/sync", headers=headers)
@@ -103,7 +103,7 @@ async def test_consultar_sync_200(client, monkeypatch):
 
 async def test_consultar_sync_inexistente_404(client, monkeypatch):
     token, _, _ = await _criar_conta(
-        client, monkeypatch, "sync4@x.com", "444.444.444-44", "acc-s4", "item-s4"
+        client, monkeypatch, "sync4@x.com", "444.444.440-10", "acc-s4", "item-s4"
     )
     r = await client.get(
         f"/api/v1/sync/{uuid.uuid4()}",
@@ -115,7 +115,7 @@ async def test_consultar_sync_inexistente_404(client, monkeypatch):
 
 async def test_consultar_sync_de_outro_usuario_404(client, monkeypatch):
     token_a, _, account_a = await _criar_conta(
-        client, monkeypatch, "sync5a@x.com", "555.555.555-55", "acc-s5", "item-s5"
+        client, monkeypatch, "sync5a@x.com", "555.555.550-40", "acc-s5", "item-s5"
     )
     r = await client.post(
         f"/api/v1/contas/{account_a}/sync",
@@ -124,7 +124,7 @@ async def test_consultar_sync_de_outro_usuario_404(client, monkeypatch):
     sync_id = r.json()["sync_id"]
 
     token_b, _, _ = await _criar_conta(
-        client, monkeypatch, "sync5b@x.com", "556.556.556-56", "acc-s5b", "item-s5b"
+        client, monkeypatch, "sync5b@x.com", "556.556.556-16", "acc-s5b", "item-s5b"
     )
     r = await client.get(
         f"/api/v1/sync/{sync_id}",
@@ -135,7 +135,7 @@ async def test_consultar_sync_de_outro_usuario_404(client, monkeypatch):
 
 async def test_iniciar_sync_conta_inexistente_404(client, monkeypatch):
     token, _, _ = await _criar_conta(
-        client, monkeypatch, "sync6@x.com", "666.666.666-66", "acc-s6", "item-s6"
+        client, monkeypatch, "sync6@x.com", "666.666.660-70", "acc-s6", "item-s6"
     )
     r = await client.post(
         f"/api/v1/contas/{uuid.uuid4()}/sync",
@@ -147,10 +147,10 @@ async def test_iniciar_sync_conta_inexistente_404(client, monkeypatch):
 
 async def test_iniciar_sync_conta_de_outro_usuario_404(client, monkeypatch):
     _, _, account_a = await _criar_conta(
-        client, monkeypatch, "sync7a@x.com", "777.777.777-77", "acc-s7", "item-s7"
+        client, monkeypatch, "sync7a@x.com", "777.777.770-09", "acc-s7", "item-s7"
     )
     token_b, _, _ = await _criar_conta(
-        client, monkeypatch, "sync7b@x.com", "778.778.778-78", "acc-s7b", "item-s7b"
+        client, monkeypatch, "sync7b@x.com", "778.778.778-38", "acc-s7b", "item-s7b"
     )
     r = await client.post(
         f"/api/v1/contas/{account_a}/sync",
@@ -165,7 +165,7 @@ async def test_worker_processa_sync_e_persiste_transacoes(client, monkeypatch):
         client,
         monkeypatch,
         "worker1@x.com",
-        "111.111.111-11",
+        "111.444.777-35",
         "acc-worker-1",
         "item-worker-1",
     )
@@ -246,7 +246,7 @@ async def test_worker_processa_sync_paginado(client, monkeypatch):
         client,
         monkeypatch,
         "worker2@x.com",
-        "222.222.222-22",
+        "222.222.220-60",
         "acc-worker-2",
         "item-worker-2",
     )
@@ -336,7 +336,7 @@ async def test_worker_claim_exclusao_mutua(client, monkeypatch):
 
     token, user_id, account_id = await _criar_conta(
         client, monkeypatch, "worker-conc@x.com",
-        "333.333.333-33", "acc-conc", "item-conc",
+        "333.333.330-90", "acc-conc", "item-conc",
     )
     r = await client.post(
         f"/api/v1/contas/{account_id}/sync",
@@ -376,7 +376,7 @@ async def test_worker_falha_pluggy_marca_failed(client, monkeypatch):
 
     token, user_id, account_id = await _criar_conta(
         client, monkeypatch, "worker-fail@x.com",
-        "444.444.444-44", "acc-fail", "item-fail",
+        "444.444.440-10", "acc-fail", "item-fail",
     )
     r = await client.post(
         f"/api/v1/contas/{account_id}/sync",
@@ -413,7 +413,7 @@ async def test_worker_recupera_processando_antigo(client, monkeypatch):
 
     token, user_id, account_id = await _criar_conta(
         client, monkeypatch, "worker-rec@x.com",
-        "555.555.555-55", "acc-rec", "item-rec",
+        "555.555.550-40", "acc-rec", "item-rec",
     )
 
     async with conexao() as conn:
@@ -451,7 +451,7 @@ async def test_worker_idempotente_nao_duplica_transactions(client, monkeypatch):
 
     token, user_id, account_id = await _criar_conta(
         client, monkeypatch, "worker-idem@x.com",
-        "666.666.666-66", "acc-idem", "item-idem",
+        "666.666.660-70", "acc-idem", "item-idem",
     )
 
     async def listar_transactions(acc, page=1, page_size=500):

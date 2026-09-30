@@ -43,7 +43,7 @@ async def _webhook(client, update_id, text, chat_id):
 
 async def test_telegram_token_unico_ativo(client):
     token_jwt, uid = await _registrar(
-        client, "tg1@x.com", "341.341.341-41"
+        client, "tg1@x.com", "341.341.341-45"
     )
 
     r1 = await _gerar_token(client, token_jwt)
@@ -69,7 +69,7 @@ async def test_telegram_token_unico_ativo(client):
 
 async def test_telegram_vincula_chat_por_start(client):
     token_jwt, uid = await _registrar(
-        client, "tg2@x.com", "342.342.342-42"
+        client, "tg2@x.com", "342.342.342-06"
     )
 
     r = await _gerar_token(client, token_jwt)
@@ -102,7 +102,7 @@ async def test_telegram_vincula_chat_por_start(client):
 
 async def test_telegram_start_envia_confirmacao(client, monkeypatch):
     token_jwt, uid = await _registrar(
-        client, "tg2b@x.com", "342.342.342-52"
+        client, "tg2b@x.com", "342.342.343-97"
     )
 
     r = await _gerar_token(client, token_jwt)
@@ -126,7 +126,7 @@ async def test_telegram_start_envia_confirmacao(client, monkeypatch):
     )
 async def test_telegram_token_expirado_400(client):
     token_jwt, uid = await _registrar(
-        client, "tg3@x.com", "343.343.343-43"
+        client, "tg3@x.com", "343.343.343-77"
     )
 
     r = await _gerar_token(client, token_jwt)
@@ -159,7 +159,7 @@ async def test_telegram_token_expirado_400(client):
 
 
 async def test_telegram_token_invalido_400(client):
-    await _registrar(client, "tg4@x.com", "344.344.344-44")
+    await _registrar(client, "tg4@x.com", "344.344.344-38")
 
     r = await _webhook(
         client, update_id=1004, text="/start token-que-nao-existe", chat_id=55558
@@ -169,7 +169,7 @@ async def test_telegram_token_invalido_400(client):
 
 
 async def test_telegram_start_sem_token_ignorado(client):
-    await _registrar(client, "tg5@x.com", "345.345.345-45")
+    await _registrar(client, "tg5@x.com", "345.345.345-07")
 
     r = await _webhook(client, update_id=1005, text="/start", chat_id=55559)
     assert r.status_code == 200
@@ -178,7 +178,7 @@ async def test_telegram_start_sem_token_ignorado(client):
 
 async def test_telegram_update_id_duplicado_nao_reprocessa(client):
     token_jwt, uid = await _registrar(
-        client, "tg6@x.com", "346.346.346-46"
+        client, "tg6@x.com", "346.346.346-60"
     )
 
     r = await _gerar_token(client, token_jwt)

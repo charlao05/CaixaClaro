@@ -51,7 +51,7 @@ async def test_extrato_colar_propaga_regime(client, monkeypatch):
     monkeypatch.setattr(t_mod, "processar_lancamento", spy)
 
     token, _ = await _registrar_com_regime(
-        client, "regime-col@x.com", "111.111.111-11", "PF"
+        client, "regime-col@x.com", "111.444.777-35", "PF"
     )
     r = await client.post(
         "/api/v1/transacoes/extrato/colar",
@@ -70,7 +70,7 @@ async def test_extrato_colar_propaga_regime(client, monkeypatch):
 async def test_reivindicar_sync_traz_regime_do_usuario(client, monkeypatch):
     """D5-A — a query de claim do worker carrega users.regime junto."""
     token, user_id = await _registrar_com_regime(
-        client, "regime-worker@x.com", "222.222.222-22", "SIMPLES"
+        client, "regime-worker@x.com", "222.222.220-60", "SIMPLES"
     )
 
     async def buscar_item(item_id):

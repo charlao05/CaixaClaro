@@ -113,7 +113,7 @@ async def test_token_sid_nao_uuid_rejeitado_401_nao_500(client):
 async def test_senha_curta_rejeitada_com_422(client):
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "curta@x.com", "senha": "1234567", "cpf": "111.111.111-11"},
+        json={"email": "curta@x.com", "senha": "1234567", "cpf": "111.444.777-35"},
     )
     assert r.status_code == 422
     assert r.json()["erro"] == "VALIDATION_ERROR"
@@ -122,6 +122,6 @@ async def test_senha_curta_rejeitada_com_422(client):
 async def test_senha_longa_rejeitada_com_422(client):
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "longa@x.com", "senha": "a" * 73, "cpf": "111.111.111-11"},
+        json={"email": "longa@x.com", "senha": "a" * 73, "cpf": "111.444.777-35"},
     )
     assert r.status_code == 422

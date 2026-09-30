@@ -3,7 +3,7 @@ from caixaclaro.db import conexao
 from caixaclaro.services import pluggy as pluggy_mod
 
 
-async def _registrar(client, email="wh@x.com", cpf="333.333.333-33"):
+async def _registrar(client, email="wh@x.com", cpf="333.333.330-90"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},

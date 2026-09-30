@@ -56,7 +56,7 @@ def _mock_enviar(monkeypatch):
 async def test_colar_cruza_faixa_envia_telegram(client, monkeypatch):
     """Usuario com chat_id: alerta de faixa e enviado 1x por faixa cruzada."""
     _, uid = await _registrar_com_chat(
-        client, email="notif1@x.com", cpf="511.511.511-51", chat_id=90001
+        client, email="notif1@x.com", cpf="511.511.511-57", chat_id=90001
     )
     enviar = _mock_enviar(monkeypatch)
 
@@ -77,7 +77,7 @@ async def test_colar_cruza_faixa_envia_telegram(client, monkeypatch):
 async def test_colar_sem_chat_nao_envia(client, monkeypatch):
     """Usuario sem telegram_chat_id: nada e enviado."""
     _, _ = await _registrar_com_chat(
-        client, email="notif2@x.com", cpf="512.512.512-52", chat_id=None
+        client, email="notif2@x.com", cpf="512.512.512-18", chat_id=None
     )
     enviar = _mock_enviar(monkeypatch)
 
@@ -93,7 +93,7 @@ async def test_colar_sem_chat_nao_envia(client, monkeypatch):
 async def test_colar_replay_idempotente_envia_uma_vez(client, monkeypatch):
     """Replay com mesma Idempotency-Key nao reenvia Telegram."""
     _, _ = await _registrar_com_chat(
-        client, email="notif3@x.com", cpf="513.513.513-53", chat_id=90003
+        client, email="notif3@x.com", cpf="513.513.513-89", chat_id=90003
     )
     enviar = _mock_enviar(monkeypatch)
     token = (await _login(client, "notif3@x.com")).json()["token"]
@@ -111,7 +111,7 @@ async def test_colar_replay_idempotente_envia_uma_vez(client, monkeypatch):
 async def test_colar_sem_cruzar_faixa_nao_envia(client, monkeypatch):
     """Receita abaixo de 60% nao cria alerta, logo nao envia."""
     _, _ = await _registrar_com_chat(
-        client, email="notif4@x.com", cpf="514.514.514-54", chat_id=90004
+        client, email="notif4@x.com", cpf="514.514.514-40", chat_id=90004
     )
     enviar = _mock_enviar(monkeypatch)
 

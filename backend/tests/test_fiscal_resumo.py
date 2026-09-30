@@ -6,7 +6,7 @@ from decimal import Decimal
 from caixaclaro.db import conexao
 
 
-async def _registrar(client, email="fr@x.com", cpf="333.333.333-33"):
+async def _registrar(client, email="fr@x.com", cpf="333.333.330-90"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -140,8 +140,8 @@ async def test_resumo_multiplas_faixas_atingidas(client):
 # ============================================================
 
 async def test_resumo_isolamento_por_usuario(client):
-    token_a = await _registrar(client, email="fra@x.com", cpf="444.444.444-44")
-    token_b = await _registrar(client, email="frb@x.com", cpf="555.555.555-55")
+    token_a = await _registrar(client, email="fra@x.com", cpf="444.444.440-10")
+    token_b = await _registrar(client, email="frb@x.com", cpf="555.555.550-40")
 
     await _colar(
         client, token_a,

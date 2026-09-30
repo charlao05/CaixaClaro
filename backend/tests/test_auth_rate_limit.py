@@ -7,7 +7,7 @@ async def _registrar_usuario(client, email="m2-rate@example.com"):
         json={
             "email": email,
             "senha": "senha-segura-123",
-            "cpf": "12345678901",
+            "cpf": "12345678909",
         },
     )
     assert resposta.status_code == 201
@@ -68,7 +68,7 @@ async def test_register_bloqueia_apos_5_no_mesmo_ip(client):
             json={
                 "email": f"m2-register-{i}@example.com",
                 "senha": "senha-segura-123",
-                "cpf": f"1234567890{i}",
+                "cpf": ["98765432029", "98765432100", "98765432290", "98765432371", "98765432452"][i],
             },
         )
         assert resposta.status_code == 201
@@ -78,7 +78,7 @@ async def test_register_bloqueia_apos_5_no_mesmo_ip(client):
         json={
             "email": "m2-register-6@example.com",
             "senha": "senha-segura-123",
-            "cpf": "12345678901",
+            "cpf": "12345678909",
         },
     )
 

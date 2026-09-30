@@ -70,7 +70,7 @@ async def test_get_contas_vazio(client):
     """Usuario sem contas: resposta vazia."""
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "sem-contas@x.com", "senha": "senha123", "cpf": "555.555.555-55"},
+        json={"email": "sem-contas@x.com", "senha": "senha123", "cpf": "555.555.550-40"},
     )
     assert r.status_code == 201
     token = r.json()["token"]
@@ -90,7 +90,7 @@ async def test_get_contas_lista_ordenado(client, monkeypatch):
 
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "com-contas@x.com", "senha": "senha123", "cpf": "666.666.666-66"},
+        json={"email": "com-contas@x.com", "senha": "senha123", "cpf": "666.666.660-70"},
     )
     assert r.status_code == 201
     token = r.json()["token"]
@@ -147,7 +147,7 @@ async def test_get_contas_isolamento_por_usuario(client, monkeypatch):
     # Usuario A com conta
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "a-contas@x.com", "senha": "senha123", "cpf": "777.777.777-77"},
+        json={"email": "a-contas@x.com", "senha": "senha123", "cpf": "777.777.770-09"},
     )
     token_a = r.json()["token"]
     async with conexao() as conn:
@@ -177,7 +177,7 @@ async def test_get_contas_isolamento_por_usuario(client, monkeypatch):
     # Usuario B sem conta
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "b-contas@x.com", "senha": "senha123", "cpf": "888.888.888-88"},
+        json={"email": "b-contas@x.com", "senha": "senha123", "cpf": "888.888.880-20"},
     )
     token_b = r.json()["token"]
 
@@ -207,7 +207,7 @@ async def test_revogar_item_sucesso_marca_consent_revogado(client, monkeypatch):
         json={
             "email": "revoga-sucesso@x.com",
             "senha": "senha123",
-            "cpf": "101.101.101-01",
+            "cpf": "101.101.101-88",
         },
     )
     assert r.status_code == 201
@@ -282,7 +282,7 @@ async def test_revogar_item_falha_externa_nao_marca_consent(client, monkeypatch)
         json={
             "email": "revoga-falha@x.com",
             "senha": "senha123",
-            "cpf": "102.102.102-02",
+            "cpf": "102.102.102-49",
         },
     )
     assert r.status_code == 201
@@ -360,7 +360,7 @@ async def test_revogar_item_isolamento_usuario(client):
         json={
             "email": "revoga-dono@x.com",
             "senha": "senha123",
-            "cpf": "103.103.103-03",
+            "cpf": "103.103.103-00",
         },
     )
     assert r.status_code == 201
@@ -370,7 +370,7 @@ async def test_revogar_item_isolamento_usuario(client):
         json={
             "email": "revoga-outro@x.com",
             "senha": "senha123",
-            "cpf": "104.104.104-04",
+            "cpf": "104.104.104-70",
         },
     )
     assert r.status_code == 201
@@ -413,7 +413,7 @@ async def test_revogar_item_idempotente_nao_chama_pluggy_de_novo(client, monkeyp
         json={
             "email": "revoga-idem@x.com",
             "senha": "senha123",
-            "cpf": "105.105.105-05",
+            "cpf": "105.105.105-31",
         },
     )
     assert r.status_code == 201
@@ -472,7 +472,7 @@ async def test_revogar_item_conta_inexistente_404(client):
         json={
             "email": "revoga-404@x.com",
             "senha": "senha123",
-            "cpf": "106.106.106-06",
+            "cpf": "106.106.106-00",
         },
     )
     assert r.status_code == 201
@@ -499,7 +499,7 @@ async def test_get_contas_apos_revogacao_nao_lista(client, monkeypatch):
         json={
             "email": "rev-lista@x.com",
             "senha": "senha123",
-            "cpf": "107.107.107-07",
+            "cpf": "107.107.107-63",
         },
     )
     assert r.status_code == 201

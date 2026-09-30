@@ -18,6 +18,7 @@ from ..security.auth import (
 from ..security.crypto import hash_cpf, cifrar_cpf
 from ..security.erros import erro
 from ..security.rate_limit import limitador_login, limitador_register
+from ..security.validacao import validar_cpf
 
 
 router = APIRouter()
@@ -82,7 +83,7 @@ async def register(dados: RegistroIn, response: Response, request: Request):
 
     cpf_digitos = _cpf_digitos(dados.cpf)
 
-    if len(cpf_digitos) != 11:
+    if not validar_cpf(cpf_digitos):
         raise erro(400, "CPF_INVALIDO", "CPF inválido.")
 
     cpf_h = hash_cpf(cpf_digitos)

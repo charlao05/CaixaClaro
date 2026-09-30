@@ -6,7 +6,7 @@ import pytest
 from caixaclaro.db import conexao
 
 
-async def _registrar(client, email: str = "t@x.com", cpf: str = "111.111.111-11") -> str:
+async def _registrar(client, email: str = "t@x.com", cpf: str = "111.444.777-35") -> str:
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -249,8 +249,8 @@ async def test_get_transacoes_ordena_data_desc(client):
 
 
 async def test_get_transacoes_isolamento_por_usuario(client):
-    a = await _registrar(client, "a@x.com", "111.111.111-11")
-    b = await _registrar(client, "b@x.com", "222.222.222-22")
+    a = await _registrar(client, "a@x.com", "111.444.777-35")
+    b = await _registrar(client, "b@x.com", "222.222.220-60")
 
     await client.post(
         "/api/v1/transacoes/extrato/colar",
@@ -321,7 +321,7 @@ async def test_processando_obsoleto_permite_reprocessar(client):
     from datetime import datetime, timedelta, timezone
     from caixaclaro.security.idempotency import _payload_hash
 
-    token = await _registrar(client, "stale@x.com", "333.333.333-33")
+    token = await _registrar(client, "stale@x.com", "333.333.330-90")
     chave = _key()
 
     async with conexao() as conn:
@@ -356,7 +356,7 @@ async def test_processando_recente_bloqueia(client):
     """Chave em 'processando' dentro da janela deve dar 409."""
     from caixaclaro.security.idempotency import _payload_hash
 
-    token = await _registrar(client, "recente@x.com", "444.444.444-44")
+    token = await _registrar(client, "recente@x.com", "444.444.440-10")
     chave = _key()
 
     async with conexao() as conn:
@@ -389,7 +389,7 @@ async def test_operacao_que_falha_marca_falhou(client):
     """Extrato ilegível deve deixar a chave em 'falhou', não em 'processando'."""
     from caixaclaro.db import conexao
 
-    token = await _registrar(client, "falha@x.com", "555.555.555-55")
+    token = await _registrar(client, "falha@x.com", "555.555.550-40")
     chave = _key()
 
     r = await client.post(
@@ -413,7 +413,7 @@ async def test_operacao_que_falha_marca_falhou(client):
 
 async def test_retry_apos_falhou_mesmo_payload_reprocessa(client):
     """Chave em 'falhou' permite nova tentativa com o MESMO payload."""
-    token = await _registrar(client, "reproc2@x.com", "999.999.999-99")
+    token = await _registrar(client, "reproc2@x.com", "999.999.990-50")
     chave = _key()
     headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": chave}
 
@@ -435,7 +435,7 @@ async def test_atomicidade_concluido_dentro_da_transacao(client):
     """Após sucesso, 'concluido' está persistido — sem janela."""
     from caixaclaro.db import conexao
 
-    token = await _registrar(client, "atom@x.com", "777.777.777-77")
+    token = await _registrar(client, "atom@x.com", "777.777.770-09")
     chave = _key()
 
     r = await client.post(
@@ -466,7 +466,7 @@ async def test_atomicidade_concluido_dentro_da_transacao(client):
 
 async def test_mesma_chave_payload_diferente_apos_falhou_409(client):
     """Mesmo com 'falhou', payload diferente ainda vê 409 KEY_REUSED."""
-    token = await _registrar(client, "reproc@x.com", "666.666.666-66")
+    token = await _registrar(client, "reproc@x.com", "666.666.660-70")
     chave = _key()
     headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": chave}
 
@@ -486,7 +486,7 @@ async def test_mesma_chave_payload_diferente_apos_falhou_409(client):
 
 async def test_concluido_com_response_persistida(client):
     """Após sucesso, 'concluido' está gravado com response e status_http."""
-    token = await _registrar(client, "atom@x.com", "777.777.777-77")
+    token = await _registrar(client, "atom@x.com", "777.777.770-09")
     chave = _key()
 
     r = await client.post(
@@ -516,7 +516,7 @@ async def test_replay_devolve_resposta_semanticamente_identica(client):
     semanticamente idêntico. Não compara bytes porque JSONB reordena
     chaves — a ordem não é contrato.
     """
-    token = await _registrar(client, "replay@x.com", "888.888.888-88")
+    token = await _registrar(client, "replay@x.com", "888.888.880-20")
     chave = _key()
     headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": chave}
 

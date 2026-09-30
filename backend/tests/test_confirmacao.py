@@ -19,7 +19,7 @@ from decimal import Decimal
 from caixaclaro.db import conexao
 
 
-async def _registrar(client, email="conf@x.com", cpf="444.444.444-44"):
+async def _registrar(client, email="conf@x.com", cpf="444.444.440-10"):
     r = await client.post(
         "/api/v1/auth/register",
         json={"email": email, "senha": "senha123", "cpf": cpf},
@@ -265,8 +265,8 @@ async def test_confirmar_duas_vezes_409(client):
 
 
 async def test_confirmar_tx_de_outro_usuario_404(client):
-    token_a = await _registrar(client, email="a@x.com", cpf="555.555.555-55")
-    token_b = await _registrar(client, email="b@x.com", cpf="666.666.666-66")
+    token_a = await _registrar(client, email="a@x.com", cpf="555.555.550-40")
+    token_b = await _registrar(client, email="b@x.com", cpf="666.666.660-70")
 
     await _colar(client, token_a, "25/09 PIX RECEBIDO JOAO R$ 100,00")
     itens = await _get_fila(client, token_a)

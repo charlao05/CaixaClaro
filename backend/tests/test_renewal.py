@@ -64,7 +64,7 @@ def _mock_asaas(monkeypatch, posts, network_error=False):
 
 
 async def test_m6_1_vencida_exatamente_uma_cobranca(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal1@x.com", "331.331.331-31")
+    user_id = await _criar_usuario(client, "renewal1@x.com", "331.331.331-01")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(
@@ -85,7 +85,7 @@ async def test_m6_1_vencida_exatamente_uma_cobranca(client, monkeypatch):
 
 
 async def test_m6_2_rodar_duas_vezes_mantem_uma_cobranca(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal2@x.com", "332.332.332-32")
+    user_id = await _criar_usuario(client, "renewal2@x.com", "332.332.332-72")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(
@@ -109,7 +109,7 @@ async def test_m6_2_rodar_duas_vezes_mantem_uma_cobranca(client, monkeypatch):
 
 
 async def test_m6_3_payment_expirado_permite_nova_cobranca(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal3@x.com", "333.333.331-33")
+    user_id = await _criar_usuario(client, "renewal3@x.com", "333.333.331-71")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(
@@ -140,7 +140,7 @@ async def test_m6_3_payment_expirado_permite_nova_cobranca(client, monkeypatch):
 
 
 async def test_m6_4_pausa_vigente_nao_cobra(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal4@x.com", "334.334.334-34")
+    user_id = await _criar_usuario(client, "renewal4@x.com", "334.334.334-02")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(
@@ -163,7 +163,7 @@ async def test_m6_4_pausa_vigente_nao_cobra(client, monkeypatch):
 
 
 async def test_m6_5_pausa_expirada_cobra(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal5@x.com", "335.335.335-35")
+    user_id = await _criar_usuario(client, "renewal5@x.com", "335.335.335-65")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(
@@ -181,7 +181,7 @@ async def test_m6_5_pausa_expirada_cobra(client, monkeypatch):
 
 
 async def test_m6_6_falha_rede_vai_para_reconciliacao(client, monkeypatch):
-    user_id = await _criar_usuario(client, "renewal6@x.com", "336.336.336-36")
+    user_id = await _criar_usuario(client, "renewal6@x.com", "336.336.336-26")
 
     async with conexao() as conn:
         sub_id = await _criar_subscription(

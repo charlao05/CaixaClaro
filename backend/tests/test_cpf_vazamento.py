@@ -16,7 +16,7 @@ def _texto_do_meta(valor) -> str:
 async def test_perfil_nao_expoe_cpf(client):
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "v1@x.com", "senha": "senha123", "cpf": "123.456.789-00"},
+        json={"email": "v1@x.com", "senha": "senha123", "cpf": "123.456.789-09"},
     )
     assert r.status_code == 201
     token = r.json()["token"]
@@ -28,8 +28,8 @@ async def test_perfil_nao_expoe_cpf(client):
     for chave in body:
         assert "cpf" not in chave.lower(), f"Chave vazada: {chave}"
     corpo_str = json.dumps(body)
-    assert "12345678900" not in corpo_str
-    assert "123.456.789-00" not in corpo_str
+    assert "12345678909" not in corpo_str
+    assert "123.456.789-09" not in corpo_str
 
 
 async def test_audit_login_falha_nao_expoe_cpf_nem_senha(client):

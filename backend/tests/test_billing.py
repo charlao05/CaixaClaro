@@ -97,7 +97,7 @@ async def _checkout(conn, user_id, plano="pro_mensal", worker="w1"):
 
 
 async def test_checkout_cria_customer_e_payment_e_retorna_qr(client, monkeypatch):
-    uid = await _criar_usuario(client, "b1@x.com", "111.111.111-11")
+    uid = await _criar_usuario(client, "b1@x.com", "111.444.777-35")
     chamadas = _mock_asaas(monkeypatch)
 
     async with conexao() as conn:
@@ -134,7 +134,7 @@ async def test_checkout_cria_customer_e_payment_e_retorna_qr(client, monkeypatch
 
 
 async def test_checkout_reusa_customer_local_sem_chamar_asaas(client, monkeypatch):
-    uid = await _criar_usuario(client, "b2@x.com", "222.222.222-22")
+    uid = await _criar_usuario(client, "b2@x.com", "222.222.220-60")
     chamadas = _mock_asaas(monkeypatch)
 
     async with conexao() as conn:
@@ -153,7 +153,7 @@ async def test_checkout_reusa_customer_local_sem_chamar_asaas(client, monkeypatc
 
 
 async def test_checkout_busca_customer_asaas_antes_de_criar(client, monkeypatch):
-    uid = await _criar_usuario(client, "b3@x.com", "333.333.333-33")
+    uid = await _criar_usuario(client, "b3@x.com", "333.333.330-90")
     chamadas = _mock_asaas(
         monkeypatch, customer_existente={"id": "cus_achado"}
     )
@@ -173,7 +173,7 @@ async def test_checkout_busca_customer_asaas_antes_de_criar(client, monkeypatch)
 
 
 async def test_checkout_adota_pagamento_existente_sem_post(client, monkeypatch):
-    uid = await _criar_usuario(client, "b4@x.com", "444.444.444-44")
+    uid = await _criar_usuario(client, "b4@x.com", "444.444.440-10")
     chamadas = _mock_asaas(
         monkeypatch,
         pagamento_existente={"id": "pay_ja_existe", "externalReference": "x"},
@@ -191,7 +191,7 @@ async def test_checkout_adota_pagamento_existente_sem_post(client, monkeypatch):
 
 
 async def test_checkout_reusa_payment_pendente_com_qr_cacheado(client, monkeypatch):
-    uid = await _criar_usuario(client, "b5@x.com", "555.555.555-55")
+    uid = await _criar_usuario(client, "b5@x.com", "555.555.550-40")
     chamadas = _mock_asaas(monkeypatch)
 
     async with conexao() as conn:
@@ -205,7 +205,7 @@ async def test_checkout_reusa_payment_pendente_com_qr_cacheado(client, monkeypat
 
 
 async def test_checkout_claim_em_andamento_409(client, monkeypatch):
-    uid = await _criar_usuario(client, "b6@x.com", "666.666.666-66")
+    uid = await _criar_usuario(client, "b6@x.com", "666.666.660-70")
     _mock_asaas(monkeypatch)
 
     async with conexao() as conn:
@@ -233,7 +233,7 @@ async def test_checkout_claim_em_andamento_409(client, monkeypatch):
 
 
 async def test_checkout_plano_invalido_400(client, monkeypatch):
-    uid = await _criar_usuario(client, "b7@x.com", "777.777.777-77")
+    uid = await _criar_usuario(client, "b7@x.com", "777.777.770-09")
     _mock_asaas(monkeypatch)
 
     async with conexao() as conn:
@@ -254,7 +254,7 @@ async def test_checkout_crash_pos_post_adota_no_retry(client, monkeypatch):
     Estado deixado: payment pendente com external_reference mas sem
     asaas_payment_id. Proximo checkout faz GET e adota, sem 2o PIX.
     """
-    uid = await _criar_usuario(client, "crash@x.com", "311.311.311-31")
+    uid = await _criar_usuario(client, "crash@x.com", "311.311.311-34")
     chamadas = _mock_asaas(
         monkeypatch,
         pagamento_existente={"id": "pay_ext_crash", "externalReference": "ref"},
@@ -298,7 +298,7 @@ async def test_checkout_corrida_dois_workers_apenas_um_post(client, monkeypatch)
     """
     import asyncio
 
-    uid = await _criar_usuario(client, "corrida@x.com", "312.312.312-32")
+    uid = await _criar_usuario(client, "corrida@x.com", "312.312.312-03")
     chamadas = _mock_asaas(monkeypatch)
 
     async def task(worker_id):
@@ -328,7 +328,7 @@ async def test_checkout_corrida_dois_workers_apenas_um_post(client, monkeypatch)
 # ----------------------------------------------------------------
 
 async def test_http_checkout_com_idempotency_key(client, monkeypatch):
-    await _criar_usuario(client, "http-billing@x.com", "313.313.313-13")
+    await _criar_usuario(client, "http-billing@x.com", "313.313.313-66")
     _mock_asaas(monkeypatch)
 
     # Registrar e obter token pelo padrão existente.
@@ -359,7 +359,7 @@ async def test_http_checkout_com_idempotency_key(client, monkeypatch):
 async def test_http_checkout_mesma_chave_retorna_mesma_resposta(
     client, monkeypatch
 ):
-    await _criar_usuario(client, "http-idem@x.com", "314.314.314-14")
+    await _criar_usuario(client, "http-idem@x.com", "314.314.314-27")
     chamadas = _mock_asaas(monkeypatch)
 
     r = await client.post(
@@ -395,7 +395,7 @@ async def test_http_checkout_mesma_chave_retorna_mesma_resposta(
 
 
 async def test_http_checkout_sem_idempotency_key_422(client):
-    await _criar_usuario(client, "http-sem-key@x.com", "315.315.315-15")
+    await _criar_usuario(client, "http-sem-key@x.com", "315.315.315-98")
 
     r = await client.post(
         "/api/v1/auth/login",

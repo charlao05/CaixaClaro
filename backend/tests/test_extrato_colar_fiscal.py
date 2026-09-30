@@ -16,7 +16,7 @@ from caixaclaro.db import conexao
 
 
 async def _registrar(
-    client, email: str = "f@x.com", cpf: str = "111.111.111-11"
+    client, email: str = "f@x.com", cpf: str = "111.444.777-35"
 ) -> str:
     r = await client.post(
         "/api/v1/auth/register",
@@ -207,7 +207,7 @@ async def test_importar_csv_persiste_classificacao_e_fiscal_state(client):
     token = await _registrar(
         client,
         email="csv-fiscal@x.com",
-        cpf="222.222.222-22",
+        cpf="222.222.220-60",
     )
 
     import base64
