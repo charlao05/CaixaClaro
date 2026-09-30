@@ -2,10 +2,15 @@
 
 ## M0 — Reconciliação documental
 Critérios de aceite:
-  - [ ] 8 documentos existem no commit
-  - [ ] Nenhuma perda material vs M0 v1.6 aprovado
-  - [ ] Inspeção de integridade PASS
-  - [ ] Commit raiz com mensagem "chore: establish CaixaClaro M0..."
+  - [x] 8 documentos existem no commit raiz 7dc3d4b
+  - [~] Nenhuma perda material vs M0 v1.6 aprovado - nao verificavel:
+        M0 v1.6 nao existe no repositorio. c3ec0fc registra restauracao
+        integral, mas sem o original a completude e inaferivel.
+  - [~] Inspecao de integridade PASS - artefato da inspecao original
+        nao recuperavel. Auditoria de 30/09/2026 confirma o estado
+        atual: git diff --check PASS, 8 arquivos presentes no HEAD
+        e git fsck sem indicacao de corrupcao.
+  - [x] Commit raiz 7dc3d4b com mensagem "chore: establish CaixaClaro M0..."
 
 ## M1 — Backend base + auth + perfil
 **Estado reconciliado em 27/09/2026 contra ea86998: implementado e testado.**
