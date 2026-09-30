@@ -93,7 +93,7 @@ Eval/golden dataset permanece no backend/CI, fora do bundle do cliente.
 | Billing | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Workers | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Telegram | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
-| Frontend | Protótipo histórico; frontend atual em /frontend/ | SIM | SIM | SIM |
+| Frontend | NÃO (fotografia M0; artefato atual em /frontend/) | NÃO | NÃO | NÃO |
 | Eval | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Produção | NÃO | NÃO | NÃO | NÃO |
 
