@@ -33,6 +33,10 @@ PropositoId = Literal[
     "gasto_pessoal",
     "imposto_taxa",
     "outros_indeterminado",
+    "aporte_capital",
+    "dinheiro_terceiros",
+    "rendimento_aplicacao",
+    "doacao_heranca",
 ]
 
 OrigemSugeridaId = Literal[
@@ -100,6 +104,13 @@ _DEFAULTS = {
     "outros":                ("outros_indeterminado",  "desconhecido",        "pessoa_fisica",     "indeterminado_pendente"),
 }
 
+_PROP_OVERRIDES = {
+    "aporte_capital":       ("conta_propria",    "ponte_pf_pj",       "isento_nao_tributavel"),
+    "dinheiro_terceiros":   ("desconhecido",     "transito_terceiro", "isento_nao_tributavel"),
+    "rendimento_aplicacao": ("banco_financeira", "pessoa_fisica",     "tributavel_irpf"),
+    "doacao_heranca":       ("amigo_familiar",   "pessoa_fisica",     "isento_nao_tributavel"),
+}
+
 
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s)
@@ -115,6 +126,10 @@ def _contem(norm: str, *termos: str) -> bool:
 
 def _montar(cat, *, via, confianca, needs_review, motivo=None, proposito=None):
     prop, orig, patr, trat = _DEFAULTS[cat]
+    if proposito is not None:
+        prop = proposito
+        if proposito in _PROP_OVERRIDES:
+            orig, patr, trat = _PROP_OVERRIDES[proposito]
     return ClassificacaoResultado(
         categoria=cat,
         proposito=proposito if proposito is not None else prop,
@@ -129,6 +144,46 @@ def _montar(cat, *, via, confianca, needs_review, motivo=None, proposito=None):
 
 
 def _heuristica(norm, ctx):
+    # M8-D3: propósitos estendidos — precedência antes das heurísticas atuais.
+    if _contem(norm, "aporte de capital", "aporte capital",
+               "integralizacao de capital", "integralizacao capital",
+               "capital social",
+               "subscricao de capital", "aumento de capital"):
+        return _montar("outros", via="heuristica", confianca=0.90,
+                       needs_review=True, proposito="aporte_capital",
+                       motivo="Aporte de capital identificado por padrao textual.")
+
+    if _contem(norm, "dinheiro de terceiro", "dinheiro de terceiros",
+               "valor de terceiro", "valor de terceiros",
+               "valor a repassar", "valor para repasse",
+               "repasse de terceiro", "repasse para terceiro",
+               "caucao",
+               "adiantamento de terceiro", "adiantamento de terceiros"):
+        return _montar("outros", via="heuristica", confianca=0.80,
+                       needs_review=True, proposito="dinheiro_terceiros",
+                       motivo="Possivel recurso de terceiro identificado.")
+
+    if _contem(norm, "doacao recebida",
+               "recebimento de doacao",
+               "heranca", "recebimento de heranca",
+               "legado", "legado recebido",
+               "meacao recebida",
+               "transmissao por heranca"):
+        return _montar("outros", via="heuristica", confianca=0.90,
+                       needs_review=True, proposito="doacao_heranca",
+                       motivo="Transmissao patrimonial identificada.")
+
+    if _contem(norm, "rendimento cdb", "rendimento tesouro",
+               "rendimento tesouro direto",
+               "rendimento poupanca", "rendimento fundo",
+               "rendimento aplicacao", "rendimento financeiro",
+               "rendimento de aplicacao",
+               "dividendos",
+               "juros sobre capital", "juros sobre capital proprio"):
+        return _montar("outros", via="heuristica", confianca=0.90,
+                       needs_review=True, proposito="rendimento_aplicacao",
+                       motivo="Rendimento financeiro identificado.")
+
     if _contem(norm, "das simples", "das mei", "pgmei", "darf", "carne leao", "gps inss",
                "arrecadacao receita federal"):
         return _montar("imposto_das", via="heuristica", confianca=0.98,

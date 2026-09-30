@@ -108,6 +108,64 @@ _CONDICAO = {
 }
 
 
+_PROP_TEXTO = {
+    "aporte_capital": {
+        "fato": "Entrada de R$ {valor} referente a aporte de capital na empresa.",
+        "interpretacao": (
+            "Recurso destinado ao capital social da empresa. Nao corresponde "
+            "a faturamento da atividade nem, por si so, a renda pessoal do titular."
+        ),
+        "tratamento": (
+            "Registrar como aporte/integralizacao de capital social. O aporte "
+            "em dinheiro nao caracteriza, por si so, rendimento tributavel do titular."
+        ),
+    },
+    "dinheiro_terceiros": {
+        "fato": (
+            "Entrada de R$ {valor} identificada como possivel recurso de "
+            "terceiro sob sua guarda."
+        ),
+        "interpretacao": (
+            "A descricao indica possivel recurso pertencente a terceiro, e nao "
+            "receita propria. A natureza deve ser confirmada antes do tratamento fiscal."
+        ),
+        "tratamento": (
+            "Se confirmado que o valor pertence a terceiro, controlar contabilmente "
+            "o repasse e nao trata-lo como receita propria."
+        ),
+    },
+    "rendimento_aplicacao": {
+        "fato": (
+            "Entrada de R$ {valor} identificada como possivel rendimento "
+            "financeiro ou de capital."
+        ),
+        "interpretacao": (
+            "O rendimento pode estar sujeito a tratamento tributario especifico "
+            "conforme o produto financeiro e sua natureza. Consulte o informe de rendimentos."
+        ),
+        "tratamento": (
+            "Declarar conforme a natureza e o informe de rendimentos da instituicao "
+            "financeira. A tributacao pode ocorrer de forma exclusiva/definitiva, "
+            "ser isenta ou seguir regra especifica."
+        ),
+    },
+    "doacao_heranca": {
+        "fato": (
+            "Entrada de R$ {valor} referente a doacao ou transmissao patrimonial."
+        ),
+        "interpretacao": (
+            "Transmissao patrimonial sem contrapartida. Em regra, doacoes e "
+            "herancas nao constituem rendimento tributavel pelo IRPF, mas devem "
+            "ser informadas conforme sua natureza."
+        ),
+        "tratamento": (
+            "Declarar conforme a natureza da transmissao na declaracao do IRPF. "
+            "Verificar eventual incidencia de ITCMD estadual."
+        ),
+    },
+}
+
+
 def _opcoes_para(categoria: str) -> list[OpcaoEsclarecimento]:
     if categoria != "outros":
         return []
@@ -199,6 +257,14 @@ def generate_tax_opinion(
     else:
         pendencias = "Nenhuma pendência identificada."
         proximo = "Nenhuma ação necessária."
+
+    # M8-D3: override por proposito estendido, quando aplicavel.
+    proposito = classif.proposito
+    if proposito in _PROP_TEXTO:
+        override = _PROP_TEXTO[proposito]
+        fato = override["fato"].format(valor=valor_str)
+        interpretacao = override["interpretacao"]
+        tratamento = override["tratamento"]
 
     grau = _grau(classif.confianca, classif.via)
     opcoes = _opcoes_para(categoria)
