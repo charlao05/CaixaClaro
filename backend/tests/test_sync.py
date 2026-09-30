@@ -317,7 +317,7 @@ async def test_worker_processa_sync_paginado(client, monkeypatch):
             uuid.UUID(user_id),
         )
 
-    assert paginas == [1, 2]
+    assert cursores == [None, "cursor-2"]
     assert quantidade == 2
 
 

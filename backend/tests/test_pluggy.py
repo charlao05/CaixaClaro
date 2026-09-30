@@ -287,25 +287,36 @@ async def test_revogar_item_404_e_sucesso(monkeypatch):
 async def test_listar_transactions(monkeypatch):
     _com_credenciais(monkeypatch)
 
+    chamadas = []
+
     async def handler(request):
         if request.url.path == "/auth":
             return httpx.Response(200, json={"apiKey": "api-key"})
-        if request.url.path == "/transactions":
+        if request.url.path == "/v2/transactions":
             assert request.method == "GET"
             assert request.headers["X-API-KEY"] == "api-key"
             assert request.url.params["accountId"] == "acc-1"
-            assert request.url.params["page"] == "1"
-            assert request.url.params["pageSize"] == "500"
+            after = request.url.params.get("after")
+            chamadas.append(after)
+            if after is None:
+                return httpx.Response(
+                    200,
+                    json={
+                        "results": [
+                            {"id": "tx-1", "date": "2026-09-01", "amount": 100.5},
+                            {"id": "tx-2", "date": "2026-09-02", "amount": -50.0},
+                        ],
+                        "next": "cursor-2",
+                    },
+                )
+            assert after == "cursor-2"
             return httpx.Response(
                 200,
                 json={
                     "results": [
-                        {"id": "tx-1", "date": "2026-09-01", "amount": 100.5},
-                        {"id": "tx-2", "date": "2026-09-02", "amount": -50.0},
+                        {"id": "tx-3", "date": "2026-09-03", "amount": 25.0},
                     ],
-                    "total": 2,
-                    "page": 1,
-                    "totalPages": 1,
+                    "next": None,
                 },
             )
         return httpx.Response(404)
@@ -314,11 +325,17 @@ async def test_listar_transactions(monkeypatch):
         pluggy_mod.httpx, "AsyncClient", _mock_transport(handler)
     )
 
-    out = await pluggy_mod.listar_transactions("acc-1")
+    out1 = await pluggy_mod.listar_transactions("acc-1")
+    assert out1["next"] == "cursor-2"
+    assert len(out1["results"]) == 2
+    assert out1["results"][0]["id"] == "tx-1"
 
-    assert out["totalPages"] == 1
-    assert len(out["results"]) == 2
-    assert out["results"][0]["id"] == "tx-1"
+    out2 = await pluggy_mod.listar_transactions("acc-1", cursor=out1["next"])
+    assert out2["next"] is None
+    assert len(out2["results"]) == 1
+    assert out2["results"][0]["id"] == "tx-3"
+
+    assert chamadas == [None, "cursor-2"]
 
 
 async def test_listar_transactions_falha_erro_502(monkeypatch):
