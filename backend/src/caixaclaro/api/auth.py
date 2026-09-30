@@ -1,25 +1,25 @@
 import asyncio
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from ..config import settings
 from ..db import conexao
 from ..security.audit import hash_email, registrar_auditoria
 from ..security.auth import (
-    hash_senha,
-    verificar_senha,
     criar_sessao,
     gerar_token,
+    hash_senha,
     revogar_sessao,
+    verificar_senha,
 )
-from ..security.crypto import hash_cpf, cifrar_cpf
+from ..security.crypto import cifrar_cpf, hash_cpf
 from ..security.erros import erro
 from ..security.rate_limit import limitador_login, limitador_register
 from ..security.validacao import validar_cpf
-
 
 router = APIRouter()
 _bearer = HTTPBearer(auto_error=True)
@@ -219,7 +219,7 @@ async def login(dados: LoginIn, request: Request):
 
 @router.post("/logout")
 async def logout(
-    cred: HTTPAuthorizationCredentials = Depends(_bearer),
+    cred: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ):
     try:
         payload = jwt.decode(
