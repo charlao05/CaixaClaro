@@ -132,19 +132,30 @@ export default function Dashboard({
             Depois, o CaixaClaro organiza os lançamentos e mostra o que precisa da sua revisão.
           </p>
           <button type="button" onClick={onNovaIngestao}>
-            Nova ingestão
+            Importar extrato
           </button>
         </section>
       )}
 
+      {resumo.tem_transacoes && (
+        <section>
+          <h2>Seu dinheiro está sendo acompanhado</h2>
+          <p>
+            O CaixaClaro já analisou seus lançamentos e mostra o que está
+            acontecendo, o que precisa da sua atenção e o que ainda precisa
+            ser confirmado.
+          </p>
+        </section>
+      )}
+
       <section>
-        <h2>Faturamento {resumo.ano_referencia}</h2>
+        <h2>Seu faturamento em {resumo.ano_referencia}</h2>
         <p>
           <strong>{formatBRL(resumo.faturamento_acumulado)}</strong>
           {' de '}
           {formatBRL(resumo.teto_anual)}
         </p>
-        <p>{(resumo.percentual_consumido * 100).toFixed(1)}% do teto</p>
+        <p>{(resumo.percentual_consumido * 100).toFixed(1)}% do teto anual</p>
         {resumo.proxima_faixa ? (
           <p>
             Próxima faixa: {(resumo.proxima_faixa.percentual * 100).toFixed(0)}% — faltam{' '}
@@ -156,29 +167,50 @@ export default function Dashboard({
       </section>
 
       <section>
-        <h2>Alertas não lidos</h2>
-        {alertas.length === 0 ? (
-          <p>Nenhum alerta pendente.</p>
+        {fila.length === 0 ? (
+          <h2>Nada pendente para revisar no momento.</h2>
         ) : (
-          <ul>
-            {alertas.map((a) => (
-              <li key={a.id}>
-                <strong>{a.severidade}</strong> — {a.mensagem}
-              </li>
-            ))}
-          </ul>
+          <>
+            <h2>
+              {fila.length === 1
+                ? 'Há 1 item aguardando sua confirmação'
+                : `Há ${fila.length} itens aguardando sua confirmação`}
+            </h2>
+            <p>
+              O CaixaClaro identificou movimentações que ainda precisam da sua
+              revisão para classificar com segurança.
+            </p>
+            <button type="button" onClick={onRevisar}>
+              Revisar agora
+            </button>
+          </>
         )}
       </section>
 
       <section>
-        <h2>Pendentes</h2>
-        {fila.length === 0 ? (
-          <p>Nada para revisar.</p>
+        {alertas.length === 0 ? (
+          <h2>Nenhum alerta ativo no momento.</h2>
         ) : (
-          <p>
-            {fila.length}{' '}
-            {fila.length === 1 ? 'item pendente' : 'itens pendentes'}
-          </p>
+          <>
+            <h2>
+              {alertas.length === 1
+                ? 'Você tem 1 alerta para verificar'
+                : `Você tem ${alertas.length} alertas para verificar`}
+            </h2>
+            <ul>
+              {alertas.slice(0, 3).map((a) => (
+                <li key={a.id}>
+                  <strong>{a.severidade}</strong> — {a.mensagem}
+                </li>
+              ))}
+            </ul>
+            {alertas.length > 3 && (
+              <p>... e mais {alertas.length - 3}.</p>
+            )}
+            <button type="button" onClick={onAlertas}>
+              Ver todos os alertas
+            </button>
+          </>
         )}
       </section>
     </main>
