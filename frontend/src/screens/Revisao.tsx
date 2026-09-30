@@ -45,7 +45,7 @@ const CATEGORIAS_COMPLETAS: { id: string; label: string }[] = [
   { id: 'taxas_tarifas', label: 'Taxas Bancárias & Maquininha' },
   { id: 'custo_operacional', label: 'Gastos da Atividade / Trabalho' },
   { id: 'transferencia_propria', label: 'Transferência Entre Contas Próprias' },
-  { id: 'pessoal_prolabore', label: 'Retirada da Empresa / Pró-Labore' },
+  { id: 'pessoal_prolabore', label: 'Retirada da Empresa / Pró-Labore (seu salário)' },
   { id: 'reembolso', label: 'Devolução / Reembolso' },
   { id: 'emprestimo', label: 'Empréstimo (peguei ou emprestei)' },
   { id: 'outros', label: 'Aguardando Confirmação' },

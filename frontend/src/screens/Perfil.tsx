@@ -171,7 +171,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
       setPerfil(p)
       if (p.telegram_chat_id === null) {
         setMsgVerificacao(
-          'Ainda não detectamos a vinculação. Confirme que enviou /start com o token correto para o bot.',
+          'Ainda não detectamos a conexão. Confirme que enviou /start com o código correto para o Telegram.',
         )
       }
     } catch (e) {
@@ -284,7 +284,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
         {perfil.telegram_chat_id !== null ? (
           <div className="telegram-vinculado">
             <p>
-              <strong>Vinculado</strong> — você vai receber alertas de
+              <strong>Conectado</strong> — você vai receber alertas de
               faturamento e DAS no Telegram.
             </p>
           </div>
@@ -302,7 +302,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
                 onClick={handleGerarToken}
                 disabled={gerandoToken}
               >
-                {gerandoToken ? 'Gerando...' : 'Vincular Telegram'}
+                {gerandoToken ? 'Gerando...' : 'Conectar Telegram'}
               </button>
             )}
 
@@ -330,7 +330,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
                     onClick={handleVerificar}
                     disabled={verificando}
                   >
-                    {verificando ? 'Verificando...' : 'Já vinculei — verificar'}
+                    {verificando ? 'Verificando...' : 'Já conectei — verificar'}
                   </button>
                 </div>
 

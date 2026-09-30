@@ -167,8 +167,8 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
               onChange={(e) => setFormato(e.target.value as FormatoArquivo)}
               disabled={importando}
             >
-              <option value="csv">CSV</option>
-              <option value="ofx">OFX</option>
+              <option value="csv">CSV (planilha)</option>
+              <option value="ofx">OFX (extrato bancário)</option>
             </select>
           </label>
           <label>

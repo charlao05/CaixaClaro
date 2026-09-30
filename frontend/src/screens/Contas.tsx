@@ -202,7 +202,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
 
   async function handleRevogar(contaId: string) {
     const ok = window.confirm(
-      'Revogar esta conexão? As transações já importadas permanecem.',
+      'Desconectar esta conexão? As transações já importadas permanecem.',
     )
     if (!ok) return
     setErroConectar(null)
@@ -305,7 +305,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
                     onClick={() => handleRevogar(c.id)}
                     disabled={revogando === c.id}
                   >
-                    {revogando === c.id ? 'Revogando...' : 'Revogar'}
+                    {revogando === c.id ? 'Desconectando...' : 'Desconectar'}
                   </button>
                 </div>
 
