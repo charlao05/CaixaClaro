@@ -93,7 +93,7 @@ Eval/golden dataset permanece no backend/CI, fora do bundle do cliente.
 | Billing | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Workers | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Telegram | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
-| Frontend | Protótipo fora do repo | NÃO | NÃO | NÃO |
+| Frontend | Protótipo histórico; frontend atual em /frontend/ | SIM | SIM | SIM |
 | Eval | NÃO (fotografia M0) | NÃO | NÃO | NÃO |
 | Produção | NÃO | NÃO | NÃO | NÃO |
 
@@ -114,7 +114,9 @@ Estado atual verificado contra main em ea8699897f1a0d1a7e93302697bed6fa66622cfa:
   recuperável.
 - Workers: implementados e testados.
 - Telegram: implementado e testado; produção ainda depende de configuração.
-- Frontend: continua ausente deste repositório.
+- Frontend: o registro "ausente deste repositório" é histórico; o frontend
+  atual está versionado em /frontend/. M8 permanece aberto por critérios de
+  aceite, não por ausência do artefato.
 - Eval/CI: implementado; M9.4 permanece bloqueado pela definição A–H
   não recuperável.
 - Produção M10a: fundação implementada parcialmente; backup/restore,

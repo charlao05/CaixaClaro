@@ -1,10 +1,14 @@
 # M8 — Decisão: integração do frontend protótipo
 
+> ⚠️ Documento histórico reconciliado. O frontend hoje existe em `/frontend/` no `main`; os trechos abaixo sobre ausência de artefato referem-se ao estado histórico anterior à implementação M8.
+
 ## Contexto
 
-M8 (frontend conectado) estava marcado como PULADO em MILESTONES.md, com
-nota "nenhum artefato frontend no repositorio atual". A auditoria de
-docs/RECONCILIACAO.md §5 registrava "Frontend | Protótipo fora do repo".
+M8 (frontend conectado) estava marcado como PULADO em uma versão histórica
+de MILESTONES.md, com a nota "nenhum artefato frontend no repositorio
+atual". A auditoria histórica de docs/RECONCILIACAO.md §5 também registrava
+"Frontend | Protótipo fora do repo". Esse estado foi superado: o repositório
+atual contém o frontend em /frontend/.
 
 Investigação posterior localizou materialmente o protótipo no Google AI
 Studio (Applet 0833d2aa-3e71-4a93-8e95-c7acaa6fd35b, projeto GCP
@@ -193,7 +197,7 @@ Bloco 3 — portar após fechamento do contrato fiscal:
 
 O Bloco 3 depende de D1, D2b, D2c, D3 e D5 implementados. Não começa antes.
 
-## O que NÃO será portado
+## O que NÃO será portado do protótipo histórico
 
 - firebase/config.ts, firebase/service.ts (substituídos por services/api.ts)
 - engine/classifiers.ts, engine/guardrails.ts, engine/taxOpinions.ts,
