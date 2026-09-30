@@ -121,13 +121,55 @@ Critérios:
 
 ## M8 — Frontend conectado
 Critérios:
-  - [ ] Componentes consomem API
-  - [ ] Motor fiscal não existe no bundle
-  - [ ] Maria Silva apenas em modo demonstração
-  - [ ] services/api.ts injeta JWT
-        Frontend presente no repositorio atual; M8 permanece aberto
-        ate comprovacao dos quatro criterios acima. Ver
-        docs/M8_DECISAO.md.
+  - [x] Componentes consomem API
+        Evidência: 11 arquivos em frontend/src/screens/ importam de
+        frontend/src/services/ e chamam os serviços efetivamente
+        (Dashboard.tsx:4-6 → getResumo/listarAlertas/listarFila em :47-49;
+        Login.tsx:2 → login em :22; Ingestao.tsx:11 → colar em :87,
+        importar em :110; Contas.tsx:10-15 → listarContas em :76,
+        conectarBanco em :176, revogarConta em :209, iniciarSync em :223;
+        Assinatura.tsx:4-6 → getStatus/listarPayments/checkout/pausar;
+        Revisao.tsx:4 → listarFila em :87, confirmar em :113;
+        Alertas.tsx:4 → listarAlertas em :47, marcarAlertaLido em :74;
+        ListaTransacoes.tsx:7 → listarTransacoes em :54,:77;
+        Opiniao.tsx:8 → getOpiniao em :54; Perfil.tsx:9-13 → getPerfil
+        em :79, atualizarPerfil em :120, gerarTokenVinculacao em :139;
+        Register.tsx:2 → register em :45).
+        Cobertura CI: typecheck + lint via .github/workflows/frontend.yml.
+        Sem teste E2E das telas contra API real.
+  - [x] Motor fiscal não existe no bundle
+        Evidência: git grep -n "domain/fiscal" -- frontend/ → vazio;
+        git grep -n "from caixaclaro" -- frontend/ → vazio; strings
+        exclusivas do motor fiscal ('heuristica', 'regra_personalizada')
+        ausentes do artefato dist/assets/index-*.js gerado por
+        npm run build.
+        Ressalva técnica: frontend/src/screens/Revisao.tsx:21,:41 hardcoda
+        IDs de categoria ('receita_servico'). É vocabulário de UI, não o
+        motor. Candidato a follow-up (centralizar taxonomia via endpoint);
+        não bloqueia o critério.
+  - [x] Maria Silva não ocorre em código de produção
+        Critério original: "Maria Silva apenas em modo demonstração".
+        Reescrito porque não existe mecanismo de modo demonstração no
+        repositório: git grep -i "modo.demo|modo_demo|demo_mode" e
+        git grep -i "seed|dados.demo|dados_demo" em backend/src e frontend/src
+        retornam vazio. O critério original era inavaliável literalmente.
+        Evidência do critério operacional: git grep -n --untracked
+        "Maria Silva" retorna 4 ocorrências, todas em backend/tests/
+        (test_asaas.py:105,:113; test_perfil.py:12,:13). Zero em
+        backend/src/, zero em frontend/src/, zero no bundle.
+  - [x] services/api.ts injeta JWT
+        Evidência: frontend/src/services/api.ts:92-93 injeta
+        Authorization: Bearer ${token} quando token é passado.
+        Todos os serviços autenticados passam token (alertas.ts, billing.ts,
+        contas.ts, fila.ts, fiscal.ts, perfil.ts, sync.ts, tax_opinion.ts,
+        telegram.ts, transacoes.ts). auth.ts:26-34 (register) e :40-46
+        (login) são públicos por design; :50-54 (logout) é autenticado.
+        Ressalva técnica: RequestOptions não obriga token no tipo
+        TypeScript; a garantia é por uso correto, não por constraint. Não
+        bloqueia o critério; registrado como nota de robustez.
+
+M8 fechado documentalmente em 2026-09-30. Nenhuma alteração de código
+ou infraestrutura foi feita neste ciclo.
 
 ## M9 — Eval em CI
 Critérios:
