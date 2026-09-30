@@ -49,9 +49,9 @@ function msgErro(e: unknown): string {
 }
 
 function labelSync(s: SyncStatus): string {
-  if (s === 'pendente') return 'Na fila'
+  if (s === 'pendente') return 'Aguardando'
   if (s === 'processando') return 'Sincronizando'
-  if (s === 'completed') return 'Concluido'
+  if (s === 'completed') return 'Concluído'
   return 'Falhou'
 }
 
@@ -115,7 +115,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
     const timeoutId = setTimeout(() => {
       setAguardandoConta(false)
       setErroConectar(
-        'A conta nao apareceu em 30s. Se voce concluiu a autorizacao no banco, recarregue a pagina.',
+        'A conta não apareceu em 30s. Se você concluiu a autorização no banco, recarregue a página.',
       )
     }, TIMEOUT_CONTA_MS)
 
@@ -150,7 +150,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
     const timeoutId = setTimeout(() => {
       setSyncAtivo(null)
       setErroSync(
-        'Sync ainda nao terminou apos 2 min. Verifique em Transacoes se apareceram novos lancamentos.',
+        'Sincronização ainda não terminou após 2 min. Verifique em Lançamentos se apareceram novos lançamentos.',
       )
     }, TIMEOUT_SYNC_MS)
 
@@ -185,7 +185,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
         },
         onError: (e) => {
           setErroConectar(
-            e && e.message ? e.message : 'Erro no widget Pluggy.',
+            e && e.message ? e.message : 'Não foi possível abrir a conexão bancária.',
           )
         },
         onClose: () => {
@@ -202,7 +202,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
 
   async function handleRevogar(contaId: string) {
     const ok = window.confirm(
-      'Revogar esta conexao? As transacoes ja importadas permanecem.',
+      'Desconectar esta conexão? As transações já importadas permanecem.',
     )
     if (!ok) return
     setErroConectar(null)
@@ -267,7 +267,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
       {cabecalho}
 
       <section>
-        <h2>Contas bancarias</h2>
+        <h2>Contas bancárias</h2>
 
         {erroConectar && <p role="alert">{erroConectar}</p>}
         {erroSync && <p role="alert">{erroSync}</p>}
@@ -305,7 +305,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
                     onClick={() => handleRevogar(c.id)}
                     disabled={revogando === c.id}
                   >
-                    {revogando === c.id ? 'Revogando...' : 'Revogar'}
+                    {revogando === c.id ? 'Desconectando...' : 'Desconectar'}
                   </button>
                 </div>
 
@@ -322,7 +322,7 @@ export default function Contas({ sessao, onVoltar }: Props) {
 
         {aguardandoConta && (
           <p className="conta-aguardando">
-            Aguardando confirmacao do banco... a conta aparece assim que a
+            Aguardando confirmação do banco... a conta aparece assim que a
             Pluggy enviar o webhook.
           </p>
         )}

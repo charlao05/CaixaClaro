@@ -16,39 +16,39 @@ type OpcaoRapida = {
 
 const OPCOES_RAPIDAS: OpcaoRapida[] = [
   {
-    label: 'Foi pagamento por trabalho ou servico',
+    label: 'Foi pagamento por trabalho ou serviço',
     descricao: 'Renda profissional — entra no faturamento',
     categoria: 'receita_servico',
   },
   {
     label: 'Foi venda de produto',
-    descricao: 'Comercio — entra no faturamento',
+    descricao: 'Comércio — entra no faturamento',
     categoria: 'receita_venda',
   },
   {
-    label: 'Foi transferencia entre minhas contas',
+    label: 'Foi transferência entre minhas contas',
     descricao: 'Mesma titularidade — isento',
     categoria: 'transferencia_propria',
   },
   {
-    label: 'Foi emprestimo ou devolucao',
-    descricao: 'Nao e renda',
+    label: 'Foi empréstimo ou devolução',
+    descricao: 'Não é renda',
     categoria: 'emprestimo',
   },
 ]
 
 const CATEGORIAS_COMPLETAS: { id: string; label: string }[] = [
-  { id: 'receita_servico', label: 'Trabalho / Prestacao de Servico' },
-  { id: 'receita_venda', label: 'Vendas de Produtos / Comercio' },
-  { id: 'salario', label: 'Salario Formal / Aposentadoria' },
-  { id: 'imposto_das', label: 'Impostos e Tributos (DAS/IRPF/DARF)' },
-  { id: 'taxas_tarifas', label: 'Taxas Bancarias & Maquininha' },
+  { id: 'receita_servico', label: 'Trabalho / Prestação de Serviço' },
+  { id: 'receita_venda', label: 'Vendas de Produtos / Comércio' },
+  { id: 'salario', label: 'Salário Formal / Aposentadoria' },
+  { id: 'imposto_das', label: 'Impostos e tributos' },
+  { id: 'taxas_tarifas', label: 'Taxas Bancárias & Maquininha' },
   { id: 'custo_operacional', label: 'Gastos da Atividade / Trabalho' },
-  { id: 'transferencia_propria', label: 'Transferencia Entre Contas Proprias' },
-  { id: 'pessoal_prolabore', label: 'Retirada da Empresa / Pro-Labore' },
-  { id: 'reembolso', label: 'Devolucao / Reembolso' },
-  { id: 'emprestimo', label: 'Emprestimo (peguei ou emprestei)' },
-  { id: 'outros', label: 'Aguardando Confirmacao' },
+  { id: 'transferencia_propria', label: 'Transferência Entre Contas Próprias' },
+  { id: 'pessoal_prolabore', label: 'Retirada da Empresa / Pró-Labore (seu salário)' },
+  { id: 'reembolso', label: 'Devolução / Reembolso' },
+  { id: 'emprestimo', label: 'Empréstimo (peguei ou emprestei)' },
+  { id: 'outros', label: 'Aguardando Confirmação' },
 ]
 
 function formatBRL(s: string): string {
@@ -169,7 +169,7 @@ export default function Revisao({ sessao, onVoltar }: Props) {
         {cabecalho}
         <section>
           <h2>Tudo verificado e seguro</h2>
-          <p>Nenhuma movimentacao pendente de confirmacao no momento.</p>
+          <p>Nenhuma movimentação pendente de confirmação no momento.</p>
         </section>
       </main>
     )

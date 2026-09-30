@@ -74,7 +74,7 @@ export default function Login({ onLogin, onIrParaRegister }: Props) {
         </button>
       </form>
       <p>
-        Nao tem conta?{' '}
+        Não tem conta?{' '}
         <button type="button" onClick={onIrParaRegister} disabled={carregando}>
           Criar conta
         </button>

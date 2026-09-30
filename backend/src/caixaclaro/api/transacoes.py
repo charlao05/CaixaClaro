@@ -477,7 +477,7 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out)
     try:
         tx_uuid = _uuid.UUID(tx_id)
     except ValueError:
-        raise erro(400, "ID_INVALIDO", "ID da transacao invalido")
+        raise erro(400, "ID_INVALIDO", "ID da transação inválido")
 
     resultado, motivo = await confirmar_tx(
         conn, _uuid.UUID(user_id), tx_uuid, categoria_nova, user_id
@@ -485,13 +485,13 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out)
 
     if resultado is None:
         if motivo == "nao_encontrada":
-            raise erro(404, "TX_NAO_ENCONTRADA", "Transacao nao encontrada")
+            raise erro(404, "TX_NAO_ENCONTRADA", "Transação não encontrada")
         if motivo == "ja_confirmada":
-            raise erro(409, "JA_CONFIRMADA", "Transacao ja foi confirmada")
+            raise erro(409, "JA_CONFIRMADA", "Transação já foi confirmada")
         if motivo == "nao_esta_em_revisao":
             raise erro(
                 409, "NAO_EM_REVISAO",
-                "Transacao nao esta em fila de revisao",
+                "Transação não está em fila de revisão",
             )
         if motivo == "categoria_invalida":
             raise erro(
@@ -557,7 +557,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
     try:
         tx_uuid = _uuid.UUID(tx_id)
     except ValueError:
-        raise erro(400, "ID_INVALIDO", "ID da transacao invalido")
+        raise erro(400, "ID_INVALIDO", "ID da transação inválido")
 
     row = await conn.fetchrow(
         """
@@ -571,7 +571,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         _uuid.UUID(user_id),
     )
     if row is None:
-        raise erro(404, "TX_NAO_ENCONTRADA", "Transacao nao encontrada")
+        raise erro(404, "TX_NAO_ENCONTRADA", "Transação não encontrada")
 
     # §6: generate_tax_opinion(tx, classif, context) recebe classif
     # como ENTRADA. Lemos o estado PERSISTIDO — nao recomputamos o
@@ -678,13 +678,13 @@ async def marcar_alerta_lido_endpoint(
     try:
         aid = _uuid.UUID(alerta_id)
     except ValueError:
-        raise erro(400, "ID_INVALIDO", "ID do alerta invalido")
+        raise erro(400, "ID_INVALIDO", "ID do alerta inválido")
 
     async with conexao() as conn:
         resultado = await marcar_lido(conn, _uuid.UUID(str(u["id"])), aid)
 
     if resultado is None:
-        raise erro(404, "ALERTA_NAO_ENCONTRADO", "Alerta nao encontrado")
+        raise erro(404, "ALERTA_NAO_ENCONTRADO", "Alerta não encontrado")
 
     return {
         "alerta_id": alerta_id,

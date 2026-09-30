@@ -48,7 +48,7 @@ function labelStatusPayment(s: StatusPayment): string {
   if (s === 'confirmado') return 'Confirmado'
   if (s === 'expirado') return 'Expirado'
   if (s === 'falhou') return 'Falhou'
-  return 'Em reconciliacao'
+  return 'Aguardando confirmação'
 }
 
 export default function Assinatura({ sessao, onVoltar }: Props) {
@@ -140,13 +140,13 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
       await navigator.clipboard.writeText(checkoutAtivo.pix_copy_paste)
       setCopiado(true)
     } catch {
-      setErroAssinar('Nao foi possivel copiar o codigo Pix.')
+      setErroAssinar('Não foi possível copiar o código Pix.')
     }
   }
 
   async function handlePausar() {
     const ok = window.confirm(
-      'Pausar a assinatura? Voce nao sera cobrado enquanto pausada.',
+      'Pausar a assinatura? Você não será cobrado enquanto pausada.',
     )
     if (!ok) return
     setErroPausar(null)
@@ -206,9 +206,9 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
 
         {sub === null ? (
           <div>
-            <p>Voce nao tem assinatura ativa.</p>
+            <p>Você não tem assinatura ativa.</p>
             <p className="assinatura-nota">
-              Valores placeholder do backend; serao definidos antes do lancamento.
+              Valores provisórios; serão definidos antes do lançamento do plano.
             </p>
             <div className="assinatura-planos">
               {PLANOS.map((p) => (
@@ -235,12 +235,12 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
               <strong>Status:</strong> {sub.status}
             </p>
             <p>
-              <strong>Periodo:</strong> {formatData(sub.periodo_inicio)} ate{' '}
+              <strong>Período:</strong> {formatData(sub.periodo_inicio)} até{' '}
               {formatData(sub.periodo_fim)}
             </p>
             {sub.pausada_ate && (
               <p>
-                <strong>Pausada ate:</strong> {formatData(sub.pausada_ate)}
+                <strong>Pausada até:</strong> {formatData(sub.pausada_ate)}
               </p>
             )}
             {sub.status === 'ativa' && (
@@ -268,19 +268,19 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
           )}
           {checkoutAtivo.pix_copy_paste && (
             <>
-              <p>Ou copie o codigo Pix:</p>
+              <p>Ou copie o código Pix:</p>
               <code className="assinatura-payload">
                 {checkoutAtivo.pix_copy_paste}
               </code>
               <div className="assinatura-acoes">
                 <button type="button" onClick={handleCopiar}>
-                  {copiado ? 'Copiado!' : 'Copiar codigo'}
+                  {copiado ? 'Copiado!' : 'Copiar código'}
                 </button>
               </div>
             </>
           )}
           <p className="assinatura-nota">
-            Aguardando confirmacao do pagamento... a tela atualiza sozinha.
+            Aguardando confirmação do pagamento... a tela atualiza sozinha.
           </p>
         </section>
       )}

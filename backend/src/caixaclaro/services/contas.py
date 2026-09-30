@@ -25,7 +25,7 @@ async def processar_item_created(conn, payload: dict) -> dict:
         raise erro(
             400,
             "WEBHOOK_PAYLOAD_INVALIDO",
-            "itemId e clientUserId obrigatorios.",
+            "itemId e clientUserId obrigatórios.",
         )
     try:
         user_id = _uuid.UUID(str(client_user_id))
@@ -33,7 +33,7 @@ async def processar_item_created(conn, payload: dict) -> dict:
         raise erro(
             400,
             "WEBHOOK_CLIENTUSERID_INVALIDO",
-            "clientUserId nao e UUID.",
+            "clientUserId não é UUID.",
         ) from e
 
     # Busca antes de gravar: se a Pluggy falhar, nao criamos consent orfao.
@@ -115,7 +115,7 @@ async def revogar_item(conn, user_id, account_id) -> dict:
         user_id,
     )
     if row is None:
-        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta nao encontrada.")
+        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta não encontrada.")
     item_id = row["item_id"]
     if not item_id:
         raise erro(409, "CONTA_SEM_ITEM", "Conta sem Item Pluggy vinculado.")
@@ -161,7 +161,7 @@ async def iniciar_sync(conn, user_id, account_id) -> dict:
         user_id,
     )
     if row is None:
-        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta nao encontrada.")
+        raise erro(404, "CONTA_NAO_ENCONTRADA", "Conta não encontrada.")
 
     existente = await conn.fetchrow(
         """
@@ -198,7 +198,7 @@ async def obter_sync(conn, user_id, sync_id) -> dict:
         user_id,
     )
     if row is None:
-        raise erro(404, "SYNC_NAO_ENCONTRADO", "Sincronizacao nao encontrada.")
+        raise erro(404, "SYNC_NAO_ENCONTRADO", "Sincronização não encontrada.")
     return {
         "sync_id": str(row["id"]),
         "status": row["status"],

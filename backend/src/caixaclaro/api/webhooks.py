@@ -40,7 +40,7 @@ async def webhook_pluggy(request: Request):
         raise erro(
             400,
             "WEBHOOK_PAYLOAD_INVALIDO",
-            "event e eventId obrigatorios.",
+            "event e eventId obrigatórios.",
         )
 
     async with conexao() as conn:
@@ -79,7 +79,7 @@ async def webhook_asaas(request: Request):
         raise erro(
             400,
             "WEBHOOK_PAYLOAD_INVALIDO",
-            "event e eventId obrigatorios.",
+            "event e eventId obrigatórios.",
         )
 
     async with conexao() as conn:
@@ -119,7 +119,7 @@ async def webhook_telegram(request: Request):
         raise erro(
             400,
             "WEBHOOK_PAYLOAD_INVALIDO",
-            "update_id obrigatorio.",
+            "update_id obrigatório.",
         )
 
     message = payload.get("message") or {}
@@ -161,7 +161,7 @@ async def webhook_telegram(request: Request):
         await telegram_bot.enviar_mensagem(
             int(chat_id),
             "CaixaClaro vinculado com sucesso. "
-            "Voce vai receber aqui alertas de faturamento e DAS.",
+            "Você vai receber aqui alertas de faturamento e DAS.",
         )
     except Exception as e:
         logger.warning("telegram_welcome_failed", extra={"error": str(e)})

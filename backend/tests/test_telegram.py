@@ -122,7 +122,7 @@ async def test_telegram_start_envia_confirmacao(client, monkeypatch):
     enviar.assert_awaited_once_with(
         55556,
         "CaixaClaro vinculado com sucesso. "
-        "Voce vai receber aqui alertas de faturamento e DAS.",
+        "Você vai receber aqui alertas de faturamento e DAS.",
     )
 async def test_telegram_token_expirado_400(client):
     token_jwt, uid = await _registrar(

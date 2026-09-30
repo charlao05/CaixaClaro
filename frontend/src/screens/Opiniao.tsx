@@ -15,8 +15,8 @@ type Props = {
 
 const LABEL_GRAU: Record<GrauCerteza, string> = {
   fato_confirmado: 'Fato confirmado',
-  leitura_provavel: 'Leitura provavel',
-  duvida_declarada: 'Requer confirmacao',
+  leitura_provavel: 'Leitura provável',
+  duvida_declarada: 'Requer confirmação',
 }
 
 function classeGrau(g: GrauCerteza): string {
@@ -71,7 +71,7 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
       <div>
         <span>{sessao.user.email}</span>
         <button type="button" onClick={onVoltar}>
-          Voltar a lista
+          Voltar à lista
         </button>
       </div>
     </header>
@@ -109,26 +109,26 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
 
         <div className="opiniao-card">
           <Estagio titulo="1. Fato observado" texto={opiniao.fato} />
-          <Estagio titulo="2. Interpretacao" texto={opiniao.interpretacao} />
-          <Estagio titulo="3. Relacao PF / PJ" texto={opiniao.relacao_pf_pj} />
+          <Estagio titulo="2. Interpretação" texto={opiniao.interpretacao} />
+          <Estagio titulo="3. Relação PF / PJ" texto={opiniao.relacao_pf_pj} />
           <Estagio
-            titulo="4. Possivel tratamento tributario"
+            titulo="4. Possível tratamento tributário"
             texto={opiniao.possivel_tratamento_tributario}
           />
           <Estagio
-            titulo="5. Condicoes necessarias"
+            titulo="5. Condições necessárias"
             texto={opiniao.condicoes_necessarias}
           />
           <Estagio
-            titulo="6. O que nao sabemos"
+            titulo="6. O que não sabemos"
             texto={opiniao.pendencias}
           />
-          <Estagio titulo="7. Proximo passo" texto={opiniao.proximo_passo} />
+          <Estagio titulo="7. Próximo passo" texto={opiniao.proximo_passo} />
 
           {opiniao.opcoes_esclarecimento.length > 0 && (
             <div className="opiniao-opcoes">
               <span className="opiniao-estagio-titulo">
-                Opcoes de esclarecimento
+                Opções de esclarecimento
               </span>
               <ul>
                 {opiniao.opcoes_esclarecimento.map((o, i) => (

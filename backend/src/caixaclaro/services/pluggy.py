@@ -118,7 +118,7 @@ async def listar_transactions(
             raise erro(
                 502,
                 "PLUGGY_TRANSACTIONS_FALHOU",
-                f"Falha ao listar transacoes na Pluggy: {r.status_code}",
+                f"Falha ao listar transações na Pluggy: {r.status_code}",
             )
         return r.json()
 async def revogar_item(item_id: str) -> None:

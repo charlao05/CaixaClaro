@@ -73,13 +73,13 @@ export default function Dashboard({
       <div>
         <span>{sessao.user.email}</span>
         <button type="button" onClick={onNovaIngestao}>
-          Nova ingestao
+          Adicionar lançamento
         </button>
         <button type="button" onClick={onContas}>
           Contas
         </button>
         <button type="button" onClick={onTransacoes}>
-          Transacoes
+          Lançamentos
         </button>
         <button type="button" onClick={onRevisar}>
           Revisar
@@ -147,7 +147,7 @@ export default function Dashboard({
         <p>{(resumo.percentual_consumido * 100).toFixed(1)}% do teto</p>
         {resumo.proxima_faixa ? (
           <p>
-            Proxima faixa: {(resumo.proxima_faixa.percentual * 100).toFixed(0)}% — faltam{' '}
+            Próxima faixa: {(resumo.proxima_faixa.percentual * 100).toFixed(0)}% — faltam{' '}
             {formatBRL(resumo.proxima_faixa.falta)}
           </p>
         ) : (
@@ -156,7 +156,7 @@ export default function Dashboard({
       </section>
 
       <section>
-        <h2>Alertas nao lidos</h2>
+        <h2>Alertas não lidos</h2>
         {alertas.length === 0 ? (
           <p>Nenhum alerta pendente.</p>
         ) : (
@@ -171,7 +171,7 @@ export default function Dashboard({
       </section>
 
       <section>
-        <h2>Fila de revisao</h2>
+        <h2>Pendentes</h2>
         {fila.length === 0 ? (
           <p>Nada para revisar.</p>
         ) : (
