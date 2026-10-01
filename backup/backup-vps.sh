@@ -104,4 +104,25 @@ rotate "$WEEKLY"  "$MONTHLY" "$RETAIN_WEEKLY"
 rotate "$MONTHLY" ""         "$RETAIN_MONTHLY"
 
 log "rotação concluída"
+
+# --- Upload remoto (R2) ----------------------------------------------
+# Requer: /opt/caixaclaro/.rclone.conf (600 root:root) + remote caixaclaro-r2
+# Falha aqui NAO derruba o backup local. Apenas registra WARN.
+RCLONE_CONF="/opt/caixaclaro/.rclone.conf"
+RCLONE_REMOTE="caixaclaro-r2:caixaclaro-backup"
+
+if [ -f "$RCLONE_CONF" ]; then
+  if rclone --config "$RCLONE_CONF" copy "$BACKUP_ROOT" "$RCLONE_REMOTE" \
+       --include "*.tar.gpg" \
+       --include "*.tar.gpg.sha256" \
+       --log-level ERROR \
+       2>&1; then
+    log "OK upload R2 ($RCLONE_REMOTE)"
+  else
+    log "WARN upload R2 falhou; backup local preservado"
+  fi
+else
+  log "WARN rclone config ausente; upload R2 ignorado"
+fi
+
 exit 0

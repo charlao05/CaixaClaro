@@ -38,3 +38,7 @@ backend/.env.pre-*
 # Backups locais cifrados
 *.tar.gpg
 *.tar.gpg.sha256
+
+# Credenciais rclone (nunca versionar)
+.rclone.conf
+*.rclone.conf
