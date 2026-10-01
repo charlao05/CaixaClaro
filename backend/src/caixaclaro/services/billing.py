@@ -292,6 +292,7 @@ async def _conceder_periodo(conn, user_id, plano, periodo_dias, payment_id):
                    status = 'ativa',
                    periodo_fim = GREATEST(now(), periodo_fim)
                                  + make_interval(days => $2),
+                                 pausada_ate = NULL,
                    atualizado_em = now()
              WHERE id = $3
             """,

@@ -339,3 +339,42 @@ async def test_webhook_politica_b_grava_audit(client):
     assert meta["politica_b"] is True
     assert meta["status_anterior"] == "expirado"
     assert meta["status_novo"] == "confirmado"
+
+
+async def test_webhook_confirma_e_limpa_pausada_ate(client):
+    """H2.N: checkout apos pausa deve limpar pausada_ate residual."""
+    uid = await _registrar(client, "wh-pausa@x.com", "333.444.555-08")
+
+    async with conexao() as conn:
+        await conn.execute(
+            """
+            INSERT INTO subscriptions
+              (user_id, plano, status, periodo_inicio, periodo_fim, pausada_ate)
+            VALUES ($1, 'pro_mensal', 'pausada', now(),
+                    now() + interval '10 days',
+                    (now() + interval '30 days')::date)
+            """,
+            uid,
+        )
+        pausada_antes = await conn.fetchval(
+            "SELECT pausada_ate FROM subscriptions WHERE user_id = $1", uid
+        )
+        assert pausada_antes is not None, "premissa do teste quebrada"
+
+        _, ref = await _criar_payment(
+            conn, uid, status="pendente", asaas_id="pay_pausa_1"
+        )
+
+    r = await _post_asaas(client, "PAYMENT_CONFIRMED", "pay_pausa_1", ref)
+    assert r.status_code == 200
+    assert r.json().get("payment_encontrado") is not False, (
+        "webhook nao encontrou o payment — premissa do teste quebrada"
+    )
+
+    async with conexao() as conn:
+        sub = await conn.fetchrow(
+            "SELECT status, pausada_ate FROM subscriptions WHERE user_id = $1",
+            uid,
+        )
+    assert sub["status"] == "ativa"
+    assert sub["pausada_ate"] is None, "pausada_ate residual nao foi limpo"
