@@ -227,9 +227,16 @@ saída, em docs/ ou backup/.
       repositório. Rebaixado de [x] para [~] pela mesma disciplina
       probatória aplicada ao M0 e ao M8: DECLARADO ≠ COMPROVADO.
       Para promover a [x]: registrar data, comandos e saída do ensaio.
-- [ ] Restore funcional ensaiado a partir de um backup real
-      backup/restore-funcional.ps1 existe, mas sem registro de execução
-      contra artefato .tar.gpg real.
+- [x] Restore funcional ensaiado a partir de um backup real
+      ENSAIO EXECUTADO em 2026-09-30 21:40.
+      Pacote: caixaclaro-20261001T004021Z.tar.gpg.
+      Script: backup/restore-funcional.ps1.
+      Resultado: RESTORE FUNCIONAL CONCLUIDO.
+      Evidências: extração PASS; .env restaurado com JWT_SECRET,
+      CPF_HMAC_KEY e CPF_AES_KEY; Postgres pronto; pg_restore PASS;
+      /healthz=200; register=201 + token; login=200 + token;
+      cpf_cifrado decifrado com len=11; worker iniciado sem erro.
+      Cadeia de backups registrada em C:\backups\caixaclaro\backup.log.
 
 ### M10.C — Operação em ambiente real (natureza C)
 
