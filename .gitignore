@@ -29,6 +29,8 @@ openapi-local.json
 
 # Backups locais de .env
 backend/.env.bak.*
+backend/.env.bak-*
+.env.bak-*
 backend/.env.before-*
 backend/.env.pre-*
 .backup-passphrase

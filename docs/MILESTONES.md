@@ -221,12 +221,25 @@ Critérios verificáveis por `arquivo:linha` no repositório.
 Fecham quando houver registro rastreável no repositório: data, comando e
 saída, em docs/ ou backup/.
 
-- [~] Rollback ensaiado (retag da imagem anterior + recreate de api/worker)
-      DECLARADO: MILESTONES.md registrava [x] "ENSAIO MECÂNICO LOCAL".
-      RESSALVA: não há artefato, log ou registro rastreável do ensaio no
-      repositório. Rebaixado de [x] para [~] pela mesma disciplina
-      probatória aplicada ao M0 e ao M8: DECLARADO ≠ COMPROVADO.
-      Para promover a [x]: registrar data, comandos e saída do ensaio.
+- [x] Rollback ensaiado (retag da imagem anterior + recreate de api/worker)
+      ENSAIO EXECUTADO em 2026-09-30 21:51 (local).
+      Imagens: caixaclaro-api:latest = 13c323d5ccf1 (mais nova) e
+      caixaclaro-api:preserved-ff4f1bf2d499 = ff4f1bf2d499 (anterior).
+      Direção 1 (preserved → latest):
+        docker tag caixaclaro-api:latest caixaclaro-api:prod
+        docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api worker
+        Evidência: docker inspect → sha256:13c323d5ccf1; /healthz=200;
+        worker log: worker_started worker-fddf95fe.
+      Direção 2 (latest → preserved, rollback efetivo):
+        docker tag caixaclaro-api:preserved-ff4f1bf2d499 caixaclaro-api:prod
+        docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api worker
+        Evidência: docker inspect → sha256:ff4f1bf2d499; /healthz=200;
+        worker sem erro no startup.
+      Ressalva: /healthz não exercita o pool do PostgreSQL; prova que os
+      processos sobem e respondem, não que a versão anterior é compatível
+      com o schema atual. /readyz teria fechado essa lacuna.
+      Histórico: [x] original rebaixado a [~] por falta de registro
+      rastreável; revertido a [x] com base na evidência acima.
 - [x] Restore funcional ensaiado a partir de um backup real
       ENSAIO EXECUTADO em 2026-09-30 21:40.
       Pacote: caixaclaro-20261001T004021Z.tar.gpg.
