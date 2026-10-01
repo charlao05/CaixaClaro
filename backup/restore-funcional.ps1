@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory)] [string]$Package,
+  [string]$PassphraseFile  = "",
   [string]$WorkRoot        = "C:\backups\caixaclaro-restore-fn",
   [string]$Image           = "caixaclaro-backup:1",
   [string]$ApiImage        = "caixaclaro-api:prod",
@@ -31,10 +32,15 @@ function Info($m) { Write-Host "== $m ==" -ForegroundColor Cyan }
 
 if (-not (Test-Path $Package)) { Fail "pacote nao encontrado: $Package" }
 
-$secure = Read-Host -AsSecureString "Passphrase GPG"
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-try   { $pass = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+if (-not [string]::IsNullOrWhiteSpace($PassphraseFile)) {
+    if (-not (Test-Path $PassphraseFile)) { Fail "PassphraseFile nao encontrado: $PassphraseFile" }
+    $pass = (Get-Content $PassphraseFile -Raw).Trim()
+} else {
+    $secure = Read-Host -AsSecureString "Passphrase GPG"
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try   { $pass = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
 if ([string]::IsNullOrWhiteSpace($pass)) { Fail "passphrase vazia" }
 $passBytes = [Text.Encoding]::UTF8.GetBytes($pass + "`n")
 $pass = $null
@@ -155,7 +161,9 @@ if (-not $log.token) { Fail "login sem token" }
 Ok "POST /api/v1/auth/login = 200 + token"
 
 Info "Decifrando cpf_cifrado no ambiente restaurado"
-docker cp .\backup\check-cpf.py "${ApiContainer}:/tmp/check-cpf.py"
+$checkCpfPath = Join-Path $PSScriptRoot "check-cpf.py"
+if (-not (Test-Path $checkCpfPath)) { Fail "check-cpf.py nao encontrado: $checkCpfPath" }
+docker cp $checkCpfPath "${ApiContainer}:/tmp/check-cpf.py"
 if ($LASTEXITCODE -ne 0) { Fail "docker cp do check-cpf.py falhou" }
 docker exec $ApiContainer python /tmp/check-cpf.py
 if ($LASTEXITCODE -ne 0) { Fail "decifrar_cpf falhou" }
