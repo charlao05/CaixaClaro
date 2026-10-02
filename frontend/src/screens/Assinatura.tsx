@@ -22,8 +22,8 @@ const POLLING_MS = 3000
 const TIMEOUT_CONFIRMACAO_MS = 60000
 
 const PLANOS: { id: Plano; label: string; detalhe: string }[] = [
-  { id: 'pro_mensal', label: 'Plano mensal', detalhe: 'R$ 49,90 a cada 30 dias' },
-  { id: 'pro_anual', label: 'Plano anual', detalhe: 'R$ 499,00 a cada 365 dias' },
+  { id: 'pro_mensal', label: 'Plano mensal', detalhe: 'R$ 29,90 a cada 30 dias' },
+  { id: 'pro_anual', label: 'Plano anual', detalhe: 'R$ 299,00 a cada 365 dias' },
 ]
 
 function formatData(iso: string | null): string {

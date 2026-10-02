@@ -24,8 +24,8 @@ from . import asaas
 # PENDENTE_CONFIRMACAO: precos e periodos dos planos nao estao no
 # contrato ainda. Valores abaixo sao placeholder para destravar o M5.
 _PLANOS: dict[str, tuple[Decimal, int]] = {
-    "pro_mensal": (Decimal("49.90"), 30),
-    "pro_anual": (Decimal("499.00"), 365),
+    "pro_mensal": (Decimal("29.90"), 30),
+    "pro_anual": (Decimal("299.00"), 365),
 }
 
 _DUE_DATE_DIAS = 7
