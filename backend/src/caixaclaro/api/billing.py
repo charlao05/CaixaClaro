@@ -7,6 +7,7 @@ Endpoints:
   GET  /payments
 """
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
@@ -25,6 +26,7 @@ payments_router = APIRouter()
 class CheckoutIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     plano: str
+    metodo: Literal["pix", "cartao"] = "pix"
 
 
 class PausarIn(BaseModel):
@@ -40,7 +42,11 @@ async def checkout(
 ):
     async def operacao(conn):
         result = await billing.checkout(
-            conn, u["id"], body.plano, worker_id=idempotency_key
+            conn,
+            u["id"],
+            body.plano,
+            worker_id=idempotency_key,
+            metodo=body.metodo,
         )
         return result, 202
 
@@ -48,7 +54,7 @@ async def checkout(
         user_id=str(u["id"]),
         rota="POST /billing/checkout",
         chave=idempotency_key,
-        body={"plano": body.plano},
+        body={"plano": body.plano, "metodo": body.metodo},
         operacao=operacao,
     )
     return JSONResponse(status_code=status, content=resposta)

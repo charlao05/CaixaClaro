@@ -659,3 +659,65 @@ async def test_checkout_cartao_persiste_metodo(client, monkeypatch):
 
     assert row["metodo"] == "cartao"
     assert row["status"] == "pendente"
+
+
+# ============================================================
+# B.5 — API HTTP do cartao
+# ============================================================
+
+
+async def test_http_checkout_cartao_retorna_invoice_url(client, monkeypatch):
+    await _criar_usuario(client, "http-card@x.com", "316.316.316-59")
+    chamadas = _mock_asaas(monkeypatch)
+
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "http-card@x.com", "senha": "senha123"},
+    )
+    assert r.status_code == 200, r.json()
+    token = r.json()["token"]
+
+    chave = str(uuid.uuid4())
+    r = await client.post(
+        "/api/v1/billing/checkout",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": chave,
+        },
+        json={"plano": "pro_mensal", "metodo": "cartao"},
+    )
+
+    assert r.status_code == 202, r.json()
+    body = r.json()
+    assert body["metodo"] == "cartao"
+    assert body["status"] == "pendente"
+    assert body["invoice_url"] == "https://www.asaas.com/i/pay_card_novo"
+    assert body["pix_qr_code"] is None
+    assert body["pix_copy_paste"] is None
+
+    assert len(chamadas["criar_pagamento_cartao"]) == 1
+    assert chamadas["criar_pagamento"] == []
+    assert chamadas["qrcode"] == []
+
+
+async def test_http_checkout_metodo_invalido_422(client, monkeypatch):
+    await _criar_usuario(client, "http-bad@x.com", "52998224725")
+    _mock_asaas(monkeypatch)
+
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "http-bad@x.com", "senha": "senha123"},
+    )
+    assert r.status_code == 200, r.json()
+    token = r.json()["token"]
+
+    r = await client.post(
+        "/api/v1/billing/checkout",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": str(uuid.uuid4()),
+        },
+        json={"plano": "pro_mensal", "metodo": "dinheiro"},
+    )
+
+    assert r.status_code == 422
