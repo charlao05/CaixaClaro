@@ -42,6 +42,9 @@ def _mock_asaas(
     pagamento_criado_id="pay_novo",
     qr_imagem="base64img",
     qr_payload="000201...",
+    pagamento_cartao_id="pay_card_novo",
+    invoice_url="https://www.asaas.com/i/pay_card_novo",
+    estado_asaas=None,
 ):
     chamadas = {
         "buscar_customer": [],
@@ -49,6 +52,9 @@ def _mock_asaas(
         "buscar_pagamento": [],
         "criar_pagamento": [],
         "qrcode": [],
+        "criar_pagamento_cartao": [],
+        "buscar_pagamento_por_id": [],
+        "cancelar_pagamento": [],
     }
 
     async def buscar_customer(cpf):
@@ -88,12 +94,48 @@ def _mock_asaas(
     )
     monkeypatch.setattr(asaas_mod, "criar_pagamento_pix", criar_pagamento)
     monkeypatch.setattr(asaas_mod, "buscar_pix_qrcode", buscar_qrcode)
+
+    async def criar_pagamento_cartao(
+        customer_id, valor, external_reference, descricao, due_date
+    ):
+        chamadas["criar_pagamento_cartao"].append(
+            {
+                "customer_id": customer_id,
+                "valor": valor,
+                "external_reference": external_reference,
+                "descricao": descricao,
+                "due_date": due_date,
+            }
+        )
+        return {
+            "id": pagamento_cartao_id,
+            "externalReference": external_reference,
+            "invoiceUrl": invoice_url,
+        }
+
+    async def buscar_pagamento_por_id(payment_id):
+        chamadas["buscar_pagamento_por_id"].append(payment_id)
+        return estado_asaas
+
+    async def cancelar_pagamento(payment_id):
+        chamadas["cancelar_pagamento"].append(payment_id)
+        return None
+
+    monkeypatch.setattr(
+        asaas_mod, "criar_pagamento_cartao_avulso", criar_pagamento_cartao
+    )
+    monkeypatch.setattr(
+        asaas_mod, "buscar_pagamento_por_id", buscar_pagamento_por_id
+    )
+    monkeypatch.setattr(asaas_mod, "cancelar_pagamento", cancelar_pagamento)
     return chamadas
 
 
-async def _checkout(conn, user_id, plano="pro_mensal", worker="w1"):
+async def _checkout(
+    conn, user_id, plano="pro_mensal", worker="w1", metodo="pix"
+):
     async with conn.transaction():
-        return await billing.checkout(conn, user_id, plano, worker)
+        return await billing.checkout(conn, user_id, plano, worker, metodo)
 
 
 async def test_checkout_cria_customer_e_payment_e_retorna_qr(client, monkeypatch):
@@ -411,3 +453,209 @@ async def test_http_checkout_sem_idempotency_key_422(client):
     )
 
     assert r.status_code == 422
+
+# ============================================================
+# B.4 — cartao avulso via Invoice
+# ============================================================
+
+
+async def test_checkout_cartao_retorna_invoice_url(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc1@x.com", "111.444.777-35")
+    chamadas = _mock_asaas(monkeypatch)
+
+    async with conexao() as conn:
+        out = await _checkout(conn, uid, metodo="cartao")
+
+    assert out["metodo"] == "cartao"
+    assert out["status"] == "pendente"
+    assert out["invoice_url"] == "https://www.asaas.com/i/pay_card_novo"
+    assert out["pix_qr_code"] is None
+    assert out["pix_copy_paste"] is None
+
+    assert len(chamadas["criar_pagamento_cartao"]) == 1
+    assert chamadas["criar_pagamento"] == []
+    assert chamadas["qrcode"] == []
+
+
+async def test_checkout_metodo_invalido_400(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc2@x.com", "111.444.777-35")
+    _mock_asaas(monkeypatch)
+
+    async with conexao() as conn:
+        with pytest.raises(HTTPException) as exc:
+            await _checkout(conn, uid, metodo="dinheiro")
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail["erro"] == "METODO_INVALIDO"
+
+
+async def test_checkout_cartao_substitui_pix_pendente(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc3@x.com", "111.444.777-35")
+    async with conexao() as conn:
+        pix_id = await conn.fetchval(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, metodo)
+            VALUES ($1, 'pro_mensal', 29.90, 30, 'pendente', 'pix')
+            RETURNING id
+            """,
+            uid,
+        )
+
+    chamadas = _mock_asaas(monkeypatch)
+
+    async with conexao() as conn:
+        out = await _checkout(conn, uid, metodo="cartao")
+
+    assert out["metodo"] == "cartao"
+
+    async with conexao() as conn:
+        pix_status = await conn.fetchval(
+            "SELECT status FROM payments WHERE id = $1", pix_id
+        )
+    assert pix_status == "cancelado"
+
+    # Sem asaas_payment_id, GET/DELETE nao sao chamados.
+    assert chamadas["buscar_pagamento_por_id"] == []
+    assert chamadas["cancelar_pagamento"] == []
+
+
+async def test_checkout_pix_substitui_cartao_pendente(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc4@x.com", "111.444.777-35")
+    async with conexao() as conn:
+        cart_id = await conn.fetchval(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, metodo)
+            VALUES ($1, 'pro_mensal', 29.90, 30, 'pendente', 'cartao')
+            RETURNING id
+            """,
+            uid,
+        )
+
+    _mock_asaas(monkeypatch)
+
+    async with conexao() as conn:
+        out = await _checkout(conn, uid, metodo="pix")
+
+    assert out["metodo"] == "pix"
+    assert out["pix_qr_code"] == "base64img"
+
+    async with conexao() as conn:
+        cart_status = await conn.fetchval(
+            "SELECT status FROM payments WHERE id = $1", cart_id
+        )
+    assert cart_status == "cancelado"
+
+
+async def test_substituicao_asaas_pendente_faz_delete(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc5@x.com", "111.444.777-35")
+    async with conexao() as conn:
+        await conn.execute(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, metodo,
+               asaas_payment_id)
+            VALUES ($1, 'pro_mensal', 29.90, 30, 'pendente', 'pix', 'pay_x')
+            """,
+            uid,
+        )
+
+    chamadas = _mock_asaas(
+        monkeypatch,
+        estado_asaas={"id": "pay_x", "status": "PENDING"},
+    )
+
+    async with conexao() as conn:
+        await _checkout(conn, uid, metodo="cartao")
+
+    assert chamadas["buscar_pagamento_por_id"] == ["pay_x"]
+    assert chamadas["cancelar_pagamento"] == ["pay_x"]
+
+
+async def test_substituicao_asaas_nao_pendente_nao_deleta(
+    client, monkeypatch
+):
+    uid = await _criar_usuario(client, "bc6@x.com", "111.444.777-35")
+    async with conexao() as conn:
+        await conn.execute(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, metodo,
+               asaas_payment_id)
+            VALUES ($1, 'pro_mensal', 29.90, 30, 'pendente', 'pix', 'pay_y')
+            """,
+            uid,
+        )
+
+    chamadas = _mock_asaas(
+        monkeypatch,
+        estado_asaas={"id": "pay_y", "status": "CONFIRMED"},
+    )
+
+    async with conexao() as conn:
+        await _checkout(conn, uid, metodo="cartao")
+
+    assert chamadas["buscar_pagamento_por_id"] == ["pay_y"]
+    assert chamadas["cancelar_pagamento"] == []  # NAO chamado
+
+
+async def test_webhook_confirmado_apos_cancelado_concede_periodo(
+    client, monkeypatch
+):
+    uid = await _criar_usuario(client, "bc7@x.com", "111.444.777-35")
+    async with conexao() as conn:
+        await conn.execute(
+            """
+            INSERT INTO payments
+              (user_id, plano, valor, periodo_dias, status, metodo,
+               asaas_payment_id, external_reference)
+            VALUES ($1, 'pro_mensal', 29.90, 30, 'cancelado', 'pix',
+                    'pay_z', 'ext_z')
+            """,
+            uid,
+        )
+
+    async with conexao() as conn:
+        async with conn.transaction():
+            res = await billing.processar_webhook_asaas(
+                conn,
+                {
+                    "event": "PAYMENT_CONFIRMED",
+                    "payment": {"id": "pay_z", "externalReference": "ext_z"},
+                },
+            )
+
+    assert res["ok"] is True
+    assert res["status"] == "confirmado"
+
+    async with conexao() as conn:
+        status = await conn.fetchval(
+            "SELECT status FROM payments WHERE asaas_payment_id = 'pay_z'"
+        )
+        sub = await conn.fetchrow(
+            "SELECT plano, periodo_fim FROM subscriptions "
+            " WHERE user_id = $1",
+            uid,
+        )
+
+    assert status == "confirmado"
+    assert sub is not None
+    assert sub["plano"] == "pro_mensal"
+
+
+async def test_checkout_cartao_persiste_metodo(client, monkeypatch):
+    uid = await _criar_usuario(client, "bc8@x.com", "111.444.777-35")
+    _mock_asaas(monkeypatch)
+
+    async with conexao() as conn:
+        await _checkout(conn, uid, metodo="cartao")
+
+    async with conexao() as conn:
+        row = await conn.fetchrow(
+            "SELECT metodo, status FROM payments WHERE user_id = $1",
+            uid,
+        )
+
+    assert row["metodo"] == "cartao"
+    assert row["status"] == "pendente"

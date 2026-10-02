@@ -1,17 +1,24 @@
-"""Billing — checkout PIX via Asaas (M5).
+"""Billing — checkout via Asaas (M5 + B).
+
+Dois instrumentos:
+  - PIX avulso (fluxo original)
+  - Cartao de credito avulso (Invoice Asaas — cartao processado fora do CaixaClaro)
 
 Fluxo (CONTRATO_API.md § Billing):
   1. resolver/criar customer Asaas (users.asaas_customer_id)
-  2. obter/criar payment local (external_reference = payments.id)
-  3. adquirir claim persistente (exclusao mutua)
-  4. GET Asaas por externalReference
-     - encontrou -> adotar; vazio -> POST
-  5. buscar e persistir QR code PIX
-  6. liberar claim
+  2. se ha pendente de instrumento diferente, cancelar (local + DELETE Asaas)
+  3. obter/criar payment local (external_reference = payments.id)
+  4. adquirir claim persistente (exclusao mutua)
+  5. GET Asaas por externalReference
+     - encontrou -> adotar; vazio -> POST (pix ou cartao)
+  6. PIX: buscar e persistir QR code
+     Cartao: retornar invoiceUrl (sem persistir)
+  7. liberar claim
 
 Regra dura: nenhum POST de criacao no Asaas sem GET previo vazio.
 Decimal obrigatorio na fronteira de valor.
 """
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -20,6 +27,8 @@ from ..security.audit import registrar_auditoria
 from ..security.crypto import decifrar_cpf
 from ..security.erros import erro
 from . import asaas
+
+logger = logging.getLogger(__name__)
 
 # PENDENTE_CONFIRMACAO: precos e periodos dos planos nao estao no
 # contrato ainda. Valores abaixo sao placeholder para destravar o M5.
@@ -66,37 +75,43 @@ async def _resolver_customer(conn, user_id: UUID) -> str:
     return customer_id
 
 
-async def _obter_ou_criar_payment(conn, user_id, plano, valor, periodo_dias):
+async def _obter_ou_criar_payment(
+    conn, user_id, plano, valor, periodo_dias, metodo
+):
     """Retorna payment pendente reutilizavel ou cria novo.
 
-    Reusa pendente do mesmo plano nao expirado para evitar acumular
-    PIX nao pago. Retorna dict com id/status/asaas_payment_id/qrcode.
+    Reusa pendente do mesmo (plano, metodo) nao expirado. Chamador deve
+    cancelar pendente de outro metodo antes (ver _cancelar_pendente_diferente).
     """
     row = await conn.fetchrow(
         """
-        SELECT id, status, asaas_payment_id, pix_qr_code, pix_copy_paste
+        SELECT id, status, asaas_payment_id, pix_qr_code, pix_copy_paste, metodo
           FROM payments
          WHERE user_id = $1 AND plano = $2 AND status = 'pendente'
+           AND metodo = $3
            AND expira_em > now()
          ORDER BY criado_em DESC
          LIMIT 1
         """,
         user_id,
         plano,
+        metodo,
     )
     if row is not None:
         return dict(row)
 
     novo = await conn.fetchrow(
         """
-        INSERT INTO payments (user_id, plano, valor, periodo_dias, status)
-        VALUES ($1, $2, $3, $4, 'pendente')
+        INSERT INTO payments
+          (user_id, plano, valor, periodo_dias, status, metodo)
+        VALUES ($1, $2, $3, $4, 'pendente', $5)
         RETURNING id
         """,
         user_id,
         plano,
         valor,
         periodo_dias,
+        metodo,
     )
     payment_id = novo["id"]
     await conn.execute(
@@ -110,7 +125,104 @@ async def _obter_ou_criar_payment(conn, user_id, plano, valor, periodo_dias):
         "asaas_payment_id": None,
         "pix_qr_code": None,
         "pix_copy_paste": None,
+        "metodo": metodo,
     }
+
+
+async def _cancelar_pendente_diferente(
+    conn, user_id, plano: str, metodo_novo: str, worker_id: str
+) -> None:
+    """Cancela pendente do mesmo (user_id, plano) com metodo diferente.
+
+    P3=B: um unico pendente por (user_id, plano). Ao trocar instrumento,
+    o pendente anterior vira 'cancelado'.
+
+    DELETE no Asaas e' best-effort: higiene, nao decisao. Falha no DELETE
+    nao impede cancelamento local.
+
+    Whitelist conservadora: so faz DELETE se o estado Asaas for exatamente
+    PENDING. Qualquer outro estado => apenas marca local + warning.
+    """
+    row = await conn.fetchrow(
+        """
+        SELECT id, status, asaas_payment_id, metodo
+          FROM payments
+         WHERE user_id = $1 AND plano = $2 AND status = 'pendente'
+           AND metodo <> $3
+           AND expira_em > now()
+         ORDER BY criado_em DESC
+         LIMIT 1
+        """,
+        user_id,
+        plano,
+        metodo_novo,
+    )
+    if row is None:
+        return
+
+    payment_id = row["id"]
+    asaas_id = row["asaas_payment_id"]
+    metodo_antigo = row["metodo"]
+
+    if asaas_id is not None:
+        try:
+            estado = await asaas.buscar_pagamento_por_id(asaas_id)
+            if estado is None:
+                logger.warning(
+                    "billing_cancelar_pendente_asaas_ausente",
+                    extra={
+                        "payment_id": str(payment_id),
+                        "asaas_id": asaas_id,
+                    },
+                )
+            elif estado.get("status") == "PENDING":
+                try:
+                    await asaas.cancelar_pagamento(asaas_id)
+                except Exception as e:
+                    logger.warning(
+                        "billing_cancelar_pendente_delete_falhou",
+                        extra={
+                            "payment_id": str(payment_id),
+                            "asaas_id": asaas_id,
+                            "erro": str(e),
+                        },
+                    )
+            else:
+                logger.warning(
+                    "billing_cancelar_pendente_estado_nao_pendente",
+                    extra={
+                        "payment_id": str(payment_id),
+                        "asaas_id": asaas_id,
+                        "asaas_status": estado.get("status"),
+                    },
+                )
+        except Exception as e:
+            logger.warning(
+                "billing_cancelar_pendente_get_falhou",
+                extra={"payment_id": str(payment_id), "erro": str(e)},
+            )
+
+    await conn.execute(
+        """
+        UPDATE payments
+           SET status = 'cancelado',
+               atualizado_em = now()
+         WHERE id = $1
+        """,
+        payment_id,
+    )
+    await registrar_auditoria(
+        conn,
+        ator="usuario",
+        acao="PAGAMENTO_SUBSTITUIDO",
+        user_id=str(user_id),
+        meta={
+            "payment_id": str(payment_id),
+            "metodo_antigo": metodo_antigo,
+            "metodo_novo": metodo_novo,
+            "worker_id": worker_id,
+        },
+    )
 
 
 async def _adquirir_claim(conn, payment_id, worker_id) -> bool:
@@ -138,12 +250,20 @@ async def _liberar_claim(conn, payment_id) -> None:
     )
 
 
-async def _adotar_ou_criar_asaas(customer_id, valor, plano, external_ref):
+async def _adotar_ou_criar_asaas(customer_id, valor, plano, external_ref, metodo):
     """GET antes de POST. Devolve o payment do Asaas."""
     existente = await asaas.buscar_pagamento_por_external_reference(external_ref)
     if existente is not None:
         return existente
     due = (date.today() + timedelta(days=_DUE_DATE_DIAS)).isoformat()
+    if metodo == "cartao":
+        return await asaas.criar_pagamento_cartao_avulso(
+            customer_id=customer_id,
+            valor=valor,
+            external_reference=external_ref,
+            descricao=f"CaixaClaro {plano}",
+            due_date=due,
+        )
     return await asaas.criar_pagamento_pix(
         customer_id=customer_id,
         valor=valor,
@@ -153,10 +273,18 @@ async def _adotar_ou_criar_asaas(customer_id, valor, plano, external_ref):
     )
 
 
-async def checkout(conn, user_id, plano: str, worker_id: str) -> dict:
-    """Executa o fluxo de checkout. Retorna dict com pix_qr_code/pix_copy_paste."""
+async def checkout(
+    conn, user_id, plano: str, worker_id: str, metodo: str = "pix"
+) -> dict:
+    """Executa o fluxo de checkout.
+
+    Retorna dict com (pix_qr_code, pix_copy_paste) para PIX, ou
+    invoice_url para cartao. Sempre inclui payment_id, metodo, status.
+    """
     if plano not in _PLANOS:
         raise erro(400, "PLANO_INVALIDO", "Plano desconhecido.")
+    if metodo not in ("pix", "cartao"):
+        raise erro(400, "METODO_INVALIDO", "Metodo desconhecido.")
     valor, periodo_dias = _PLANOS[plano]
 
     # Serializa checkouts concorrentes do mesmo usuario. Requer transacao
@@ -168,17 +296,26 @@ async def checkout(conn, user_id, plano: str, worker_id: str) -> dict:
         f"billing:{user_id}",
     )
 
+    # P3=B: substitui pendente de instrumento diferente antes de criar/reusar.
+    await _cancelar_pendente_diferente(
+        conn, user_id, plano, metodo, worker_id
+    )
+
     customer_id = await _resolver_customer(conn, user_id)
 
     payment = await _obter_ou_criar_payment(
-        conn, user_id, plano, valor, periodo_dias
+        conn, user_id, plano, valor, periodo_dias, metodo
     )
-    if payment["pix_qr_code"] and payment["pix_copy_paste"]:
+
+    # Cache: PIX com QR ja emitido retorna direto.
+    if metodo == "pix" and payment["pix_qr_code"] and payment["pix_copy_paste"]:
         return {
             "payment_id": str(payment["id"]),
+            "metodo": "pix",
             "status": payment["status"],
             "pix_qr_code": payment["pix_qr_code"],
             "pix_copy_paste": payment["pix_copy_paste"],
+            "invoice_url": None,
         }
 
     ganhou = await _adquirir_claim(conn, payment["id"], worker_id)
@@ -193,8 +330,29 @@ async def checkout(conn, user_id, plano: str, worker_id: str) -> dict:
     try:
         external_ref = str(payment["id"])
         asaas_pay = await _adotar_ou_criar_asaas(
-            customer_id, valor, plano, external_ref
+            customer_id, valor, plano, external_ref, metodo
         )
+
+        if metodo == "cartao":
+            await conn.execute(
+                """
+                UPDATE payments
+                   SET asaas_payment_id = $1,
+                       atualizado_em = now()
+                 WHERE id = $2
+                """,
+                asaas_pay["id"],
+                payment["id"],
+            )
+            return {
+                "payment_id": str(payment["id"]),
+                "metodo": "cartao",
+                "status": "pendente",
+                "pix_qr_code": None,
+                "pix_copy_paste": None,
+                "invoice_url": asaas_pay.get("invoiceUrl"),
+            }
+
         qr = await asaas.buscar_pix_qrcode(asaas_pay["id"])
 
         await conn.execute(
@@ -214,9 +372,11 @@ async def checkout(conn, user_id, plano: str, worker_id: str) -> dict:
 
         return {
             "payment_id": str(payment["id"]),
+            "metodo": "pix",
             "status": "pendente",
             "pix_qr_code": qr.get("encodedImage"),
             "pix_copy_paste": qr.get("payload"),
+            "invoice_url": None,
         }
     finally:
         await _liberar_claim(conn, payment["id"])
@@ -313,7 +473,7 @@ async def _aplicar_payment_confirmed(conn, payment, payload):
 
     politica_b = atual == "expirado"
 
-    if atual in ("pendente", "pendente_reconciliacao", "expirado", "falhou"):
+    if atual in ("pendente", "pendente_reconciliacao", "expirado", "falhou", "cancelado"):
         await conn.execute(
             """
             UPDATE payments
