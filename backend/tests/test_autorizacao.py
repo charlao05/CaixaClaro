@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from caixaclaro.config import settings
-from caixaclaro.services.autorizacao import ContextoAutorizacao, decidir
+from caixaclaro.services.autorizacao import ContextoAutorizacao, avaliar, decidir
 
 
 AGORA = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
@@ -128,3 +128,58 @@ def test_agora_default_usa_agora_real():
 def test_mesmo_contexto_mesma_decisao():
     ctx = _ctx(dias_desde_criacao=365, periodo_fim=AGORA + timedelta(days=1))
     assert decidir(ctx) is decidir(ctx)
+
+# ---- E2: avaliar() e motivo do bloqueio ----
+
+def test_avaliar_trial_exempt_permite_sem_motivo():
+    d = avaliar(_ctx(trial_exempt=True, dias_desde_criacao=365))
+    assert d.permitido is True
+    assert d.motivo is None
+
+
+def test_avaliar_trial_vigente_sem_motivo():
+    d = avaliar(_ctx(dias_desde_criacao=0))
+    assert d.permitido is True
+    assert d.motivo is None
+
+
+def test_avaliar_periodo_futuro_sem_motivo():
+    d = avaliar(_ctx(dias_desde_criacao=365,
+                     periodo_fim=AGORA + timedelta(days=1)))
+    assert d.permitido is True
+    assert d.motivo is None
+
+
+def test_avaliar_trial_expirado_sem_subscription():
+    d = avaliar(_ctx(dias_desde_criacao=30, periodo_fim=None))
+    assert d.permitido is False
+    assert d.motivo == "trial_expirado"
+
+
+def test_avaliar_assinatura_vencida():
+    d = avaliar(_ctx(dias_desde_criacao=30,
+                     periodo_fim=AGORA - timedelta(seconds=1)))
+    assert d.permitido is False
+    assert d.motivo == "assinatura_expirada"
+
+
+def test_avaliar_assinatura_vencida_com_trial_vigente_permitido():
+    """Precedencia do motivo so e' relevante se permitido=False."""
+    d = avaliar(_ctx(dias_desde_criacao=0,
+                     periodo_fim=AGORA - timedelta(days=1)))
+    assert d.permitido is True
+    assert d.motivo is None
+
+
+def test_avaliar_periodo_exato_motivo_assinatura_expirada():
+    """periodo_fim == agora -> bloqueado com motivo de assinatura."""
+    d = avaliar(_ctx(dias_desde_criacao=30, periodo_fim=AGORA))
+    assert d.permitido is False
+    assert d.motivo == "assinatura_expirada"
+
+
+def test_avaliar_determinismo():
+    ctx = _ctx(dias_desde_criacao=30, periodo_fim=None)
+    d1 = avaliar(ctx)
+    d2 = avaliar(ctx)
+    assert d1 == d2

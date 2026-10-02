@@ -3,7 +3,7 @@ from fastapi import Depends
 from ..db import conexao
 from ..security.auth import usuario_atual
 from ..security.erros import erro
-from ..services.autorizacao import ContextoAutorizacao, decidir
+from ..services.autorizacao import ContextoAutorizacao, avaliar
 
 
 async def usuario(u: dict = Depends(usuario_atual)) -> dict:
@@ -38,11 +38,13 @@ async def usuario_ativo(u: dict = Depends(usuario)) -> dict:
         agora=None,
     )
 
-    if not decidir(ctx):
+    decisao = avaliar(ctx)
+    if not decisao.permitido:
         raise erro(
             402,
             "ACESSO_BLOQUEADO",
             "Assinatura ou periodo de teste expirado.",
+            extra={"estado": decisao.motivo},
         )
 
     return u

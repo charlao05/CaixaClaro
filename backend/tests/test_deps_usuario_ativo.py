@@ -72,6 +72,7 @@ async def test_trial_expirado_sem_assinatura_402(client):
         await usuario_ativo(u=u)
     assert exc.value.status_code == 402
     assert exc.value.detail["erro"] == "ACESSO_BLOQUEADO"
+    assert exc.value.detail["estado"] == "trial_expirado"
 
 
 async def test_trial_expirado_com_assinatura_vigente_passa(client):
@@ -101,6 +102,7 @@ async def test_trial_expirado_assinatura_vencida_402(client):
     with pytest.raises(HTTPException) as exc:
         await usuario_ativo(u=u)
     assert exc.value.status_code == 402
+    assert exc.value.detail["estado"] == "assinatura_expirada"
 
 
 async def test_trial_exempt_passa_mesmo_com_tudo_expirado(client):

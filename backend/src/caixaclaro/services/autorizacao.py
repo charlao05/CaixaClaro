@@ -1,10 +1,11 @@
-"""Autorizacao de uso - E1.
+"""Autorizacao de uso - E1 + E2.
 
-Decide se um usuario tem direito de uso do produto.
+Decide se um usuario tem direito de uso do produto e, a partir do E2,
+por que nao tem, quando nao tem.
 
 Funcao pura de proposito:
 - nao conhece HTTP, FastAPI, nem banco;
-- recebe um snapshot do estado persistido e retorna bool.
+- recebe um snapshot do estado persistido e retorna uma decisao.
 
 Formula (fato consolidado do billing):
 
@@ -12,6 +13,10 @@ Formula (fato consolidado do billing):
         trial_exempt == TRUE
      OR criado_em + trial_dias > agora
      OR periodo_fim > agora
+
+Motivos de bloqueio (E2):
+    trial_expirado       - trial expirou e nao ha subscription registrada
+    assinatura_expirada  - trial expirou e a subscription tem periodo_fim <= agora
 
 Notas de design:
 - 'status' da subscription NAO entra na formula. 'pausada' com periodo
@@ -24,11 +29,17 @@ Notas de design:
   expirada.
 - 'agora' e' injetavel. Se None, o servico consulta o relogio real uma
   unica vez e usa o mesmo instante em todas as comparacoes.
+- decidir() e' a interface booleana do E1. avaliar() acrescenta o motivo
+  do bloqueio sem alterar a regra de autorizacao.
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from ..config import settings
+
+
+Motivo = Literal["trial_expirado", "assinatura_expirada"]
 
 
 @dataclass(frozen=True)
@@ -44,18 +55,33 @@ class ContextoAutorizacao:
     agora: datetime | None = None
 
 
-def decidir(ctx: ContextoAutorizacao) -> bool:
-    """True se o usuario tem direito de uso. Caso contrario, False."""
+@dataclass(frozen=True)
+class Decisao:
+    """Resultado de avaliar(): permitido + motivo quando bloqueado."""
+
+    permitido: bool
+    motivo: Motivo | None = None
+
+
+def avaliar(ctx: ContextoAutorizacao) -> Decisao:
+    """Decide acesso. Retorna Decisao com motivo quando bloqueado."""
     agora = ctx.agora if ctx.agora is not None else datetime.now(timezone.utc)
 
     if ctx.trial_exempt:
-        return True
+        return Decisao(permitido=True, motivo=None)
 
     trial_fim = ctx.criado_em + timedelta(days=settings().trial_dias)
     if trial_fim > agora:
-        return True
+        return Decisao(permitido=True, motivo=None)
 
     if ctx.periodo_fim is not None and ctx.periodo_fim > agora:
-        return True
+        return Decisao(permitido=True, motivo=None)
 
-    return False
+    if ctx.periodo_fim is not None:
+        return Decisao(permitido=False, motivo="assinatura_expirada")
+    return Decisao(permitido=False, motivo="trial_expirado")
+
+
+def decidir(ctx: ContextoAutorizacao) -> bool:
+    """Interface booleana do E1. Mantida para compatibilidade."""
+    return avaliar(ctx).permitido

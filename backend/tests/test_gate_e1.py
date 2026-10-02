@@ -11,6 +11,7 @@ O fixture 'limpar_estado' do conftest apaga 'users' entre testes, entao
 reusar CPF e' seguro.
 """
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from caixaclaro.db import conexao
 
@@ -66,6 +67,7 @@ async def test_trial_expirado_402_em_produto(client):
     assert r.status_code == 402, r.text
     body = r.json()
     assert body["erro"] == "ACESSO_BLOQUEADO"
+    assert body["estado"] == "trial_expirado"
 
 
 async def test_trial_expirado_libera_perfil_e_billing(client):
@@ -97,3 +99,32 @@ async def test_trial_expirado_permite_revogar_conta(client):
     )
     assert r.status_code != 402, f"revogar foi bloqueado por engano: {r.text}"
     assert r.status_code == 404, r.text
+
+async def _criar_subscription(user_id, *, periodo_fim):
+    async with conexao() as conn:
+        await conn.execute(
+            "INSERT INTO subscriptions (user_id, plano, status, periodo_fim) "
+            "VALUES ($1, 'mensal', 'ativa', $2)",
+            uuid.UUID(user_id),
+            periodo_fim,
+        )
+
+
+async def test_assinatura_vencida_402_com_estado_assinatura_expirada(client):
+    """E2: motivo chega ao HTTP quando ha subscription vencida."""
+    dados = await _registrar(client, "assin_venc_e1@example.com")
+    await _envelhecer(dados["user"]["id"], dias=30)
+    await _criar_subscription(
+        dados["user"]["id"],
+        periodo_fim=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+
+    r = await client.post(
+        "/api/v1/transacoes/extrato/colar",
+        json={"texto": "01/01/2026 PIX RECEBIDO JOAO 100,00"},
+        headers=_hdr(dados["token"]),
+    )
+    assert r.status_code == 402, r.text
+    body = r.json()
+    assert body["erro"] == "ACESSO_BLOQUEADO"
+    assert body["estado"] == "assinatura_expirada"
