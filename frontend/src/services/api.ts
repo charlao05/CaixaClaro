@@ -1,12 +1,14 @@
 export type ApiErrorBody = {
   erro: string
   mensagem: string
+  estado?: string
 }
 
 export class ApiError extends Error {
   readonly status: number
   readonly codigo: string
   readonly retryAfter: string | null
+  readonly estado: string | null
 
   constructor(
     status: number,
@@ -18,6 +20,7 @@ export class ApiError extends Error {
     this.status = status
     this.codigo = body.erro
     this.retryAfter = retryAfter
+    this.estado = body.estado ?? null
   }
 }
 
@@ -42,20 +45,22 @@ function extrairErro(status: number, payload: unknown): ApiErrorBody {
     detail?: unknown
     erro?: unknown
     mensagem?: unknown
+    estado?: unknown
   }
 
   // FastAPI com exception handler: corpo flat { erro, mensagem }
   if (typeof obj.erro === 'string' && typeof obj.mensagem === 'string') {
-    return { erro: obj.erro, mensagem: obj.mensagem }
+    return { erro: obj.erro, mensagem: obj.mensagem, estado: typeof obj.estado === 'string' ? obj.estado : undefined }
   }
 
   const detail = obj.detail
 
   if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
-    const d = detail as { erro?: unknown; mensagem?: unknown }
+    const d = detail as { erro?: unknown; mensagem?: unknown; estado?: unknown }
     return {
       erro: typeof d.erro === 'string' ? d.erro : fallback.erro,
       mensagem: typeof d.mensagem === 'string' ? d.mensagem : fallback.mensagem,
+      estado: typeof d.estado === 'string' ? d.estado : undefined,
     }
   }
 

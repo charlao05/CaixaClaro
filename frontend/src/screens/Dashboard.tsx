@@ -54,6 +54,11 @@ export default function Dashboard({
         setFila(f.itens)
       } catch (e) {
         if (!ativo) return
+        if (e instanceof ApiError && e.estado) {
+          // E2: bloqueio de acesso sinalizado pelo backend
+          onAssinatura()
+          return
+        }
         if (e instanceof ApiError) {
           setErro(e.message)
         } else {
