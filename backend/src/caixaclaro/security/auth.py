@@ -116,7 +116,7 @@ async def usuario_atual(
 
         user = await conn.fetchrow(
             "SELECT id, email, nome, regime, mes_abertura_mei, ano_abertura_mei, "
-            "telegram_chat_id, criado_em, atualizado_em "
+            "telegram_chat_id, trial_exempt, criado_em, atualizado_em "
             "FROM users WHERE id = $1",
             sub_uuid,
         )

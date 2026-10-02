@@ -5,7 +5,7 @@ POST /webhooks/telegram (unico fluxo que grava telegram_chat_id).
 """
 from fastapi import APIRouter, Depends
 
-from ..api.deps import usuario
+from ..api.deps import usuario_ativo
 from ..db import conexao
 from ..services.telegram import gerar_token_vinculacao
 
@@ -13,6 +13,6 @@ router = APIRouter()
 
 
 @router.post("/token-vinculacao")
-async def token_vinculacao(u: dict = Depends(usuario)):
+async def token_vinculacao(u: dict = Depends(usuario_ativo)):
     async with conexao() as conn:
         return await gerar_token_vinculacao(conn, u["id"])

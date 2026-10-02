@@ -99,7 +99,7 @@ async def test_migration_que_falha_nao_registra(schema_isolado, tmp_path):
 
 async def test_aplica_migrations_reais(schema_isolado):
     n = await migration_runner.aplicar(schema_isolado)
-    assert n == 8
+    assert n == 9
 
     existe_users = await schema_isolado.fetchval(
         "SELECT to_regclass('users') IS NOT NULL"

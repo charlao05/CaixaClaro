@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url:str
     jwt_secret:str
     jwt_expira_minutos:int=60
+    trial_dias:int=7
     cpf_hmac_key:str
     cpf_aes_key:str
     pluggy_client_id:str|None=None

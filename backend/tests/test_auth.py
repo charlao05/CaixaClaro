@@ -54,3 +54,33 @@ async def test_jwt_exp_igual_sessions_expira_em(client):
     p=jose_jwt.get_unverified_claims(r.json()["token"])
     async with conexao() as conn: row=await conn.fetchrow("SELECT expira_em FROM sessions WHERE id=$1",uuid.UUID(p["sid"]))
     assert row is not None and int(p["exp"])==int(row["expira_em"].timestamp())
+
+
+async def test_usuario_atual_inclui_trial_exempt(client):
+    """E1: contrato de usuario_atual preservado + trial_exempt.
+
+    Chama usuario_atual direto (nao via /perfil) para travar o contrato
+    do snapshot, nao o do endpoint.
+    """
+    from fastapi.security import HTTPAuthorizationCredentials
+    from caixaclaro.security.auth import usuario_atual
+
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "gate_contrato@example.com",
+            "senha": "senha_segura_123",
+            "cpf": "52998224725",
+        },
+    )
+    assert r.status_code == 201
+    token = r.json()["token"]
+
+    cred = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    u = await usuario_atual(cred)
+
+    assert "trial_exempt" in u, "usuario_atual nao devolve trial_exempt"
+    assert u["trial_exempt"] is False, "novo usuario deveria ser False"
+    assert "criado_em" in u, "autorizacao.py depende de criado_em"
+    assert "regime" in u, "contrato de regime preservado"
+    assert "id" in u, "contrato de id preservado"

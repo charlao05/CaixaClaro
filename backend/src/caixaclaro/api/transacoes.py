@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..api.deps import usuario
+from ..api.deps import usuario_ativo
 from ..db import conexao
 from ..domain.ingest.parser_csv import parse_csv
 from ..domain.ingest.parser_ofx import parse_ofx
@@ -164,7 +164,7 @@ async def colar(
     dados: ColarIn,
     request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     alertas_para_enviar: list = []
 
@@ -286,7 +286,7 @@ async def importar(
     dados: ImportarIn,
     request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     try:
         bruto = base64.b64decode(dados.conteudo_base64, validate=True)
@@ -343,7 +343,7 @@ async def listar(
     ate: date | None = Query(None),
     limite: int = Query(100, ge=1, le=500),
     cursor: str | None = Query(None),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     uid = _uuid.UUID(str(u["id"]))
     cursor_data, cursor_id = (None, None)
@@ -420,7 +420,7 @@ async def fila(
     request: Request,
     limite: int = Query(50, ge=1, le=500),
     cursor: str | None = Query(None),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     try:
         async with conexao() as conn:
@@ -453,7 +453,7 @@ async def confirmar_endpoint(
     dados: ConfirmarIn,
     request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     alertas_para_enviar: list = []
 
@@ -547,7 +547,7 @@ def _serializar_opcao(o) -> dict:
 @router.get("/{tx_id}/opiniao")
 async def opiniao_endpoint(
     tx_id: str,
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     async with conexao() as conn:
         return await _operacao_opiniao(conn, str(u["id"]), tx_id)
@@ -656,7 +656,7 @@ async def listar_alertas_endpoint(
     tipo: str | None = Query(None),
     limite: int = Query(50, ge=1, le=500),
     cursor: str | None = Query(None),
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     async with conexao() as conn:
         rows, has_more, next_cursor = await listar_alertas(
@@ -676,7 +676,7 @@ async def listar_alertas_endpoint(
 @router.post("/alertas/{alerta_id}/lido")
 async def marcar_alerta_lido_endpoint(
     alerta_id: str,
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     try:
         aid = _uuid.UUID(alerta_id)
@@ -701,7 +701,7 @@ async def marcar_alerta_lido_endpoint(
 
 @router.get("/fiscal/resumo")
 async def fiscal_resumo_endpoint(
-    u: dict = Depends(usuario),
+    u: dict = Depends(usuario_ativo),
 ):
     async with conexao() as conn:
         return await resumo_fiscal(conn, _uuid.UUID(str(u["id"])))

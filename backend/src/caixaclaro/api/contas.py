@@ -5,7 +5,7 @@ Demais endpoints e webhook entram em passos seguintes.
 """
 from fastapi import APIRouter, Depends
 
-from ..api.deps import usuario
+from ..api.deps import usuario, usuario_ativo
 from ..db import conexao
 from ..services.pluggy import criar_connect_token
 
@@ -13,11 +13,11 @@ router = APIRouter()
 
 
 @router.post("/conectar")
-async def conectar(u: dict = Depends(usuario)):
+async def conectar(u: dict = Depends(usuario_ativo)):
     return await criar_connect_token(u["id"])
 
 @router.get("")
-async def listar_contas(u: dict = Depends(usuario)):
+async def listar_contas(u: dict = Depends(usuario_ativo)):
     async with conexao() as conn:
         rows = await conn.fetch(
             """
@@ -55,7 +55,7 @@ async def revogar_conta(id: str, u: dict = Depends(usuario)):
         return await revogar_item(conn, u["id"], id)
 
 @router.post("/{id}/sync", status_code=202)
-async def sincronizar_conta(id: str, u: dict = Depends(usuario)):
+async def sincronizar_conta(id: str, u: dict = Depends(usuario_ativo)):
     from ..services.contas import iniciar_sync
     async with conexao() as conn:
         return await iniciar_sync(conn, u["id"], id)
