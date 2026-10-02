@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     asaas_api_key:str|None=None
     telegram_bot_token:str|None=None
     asaas_base_url:str='https://api.asaas.com/v3'
+    frontend_url:str
     eval_ultima_execucao_path:str="var/eval/ultima_execucao.json"
     pluggy_webhook_secret:str|None=None
     asaas_webhook_token:str|None=None

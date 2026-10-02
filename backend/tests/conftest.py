@@ -21,6 +21,7 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql://caixaclaro:dev_only_change_me@localhost:5432/caixaclaro",
 )
+os.environ.setdefault("FRONTEND_URL", "http://localhost:5173")
 
 os.environ.setdefault("PLUGGY_WEBHOOK_SECRET", "test-pluggy-secret")
 os.environ.setdefault("ASAAS_WEBHOOK_TOKEN", "test-asaas-token")

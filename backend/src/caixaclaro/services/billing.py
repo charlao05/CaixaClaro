@@ -23,6 +23,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from ..config import settings
 from ..security.audit import registrar_auditoria
 from ..security.crypto import decifrar_cpf
 from ..security.erros import erro
@@ -263,6 +264,7 @@ async def _adotar_ou_criar_asaas(customer_id, valor, plano, external_ref, metodo
             external_reference=external_ref,
             descricao=f"CaixaClaro {plano}",
             due_date=due,
+            success_url=settings().frontend_url,
         )
     return await asaas.criar_pagamento_pix(
         customer_id=customer_id,

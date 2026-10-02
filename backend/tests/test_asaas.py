@@ -230,6 +230,7 @@ async def test_criar_pagamento_cartao_avulso(monkeypatch):
             "dueDate": "2026-10-15",
             "description": "CaixaClaro pro_mensal",
             "externalReference": "pay-local-card-1",
+            "callback": {"successUrl": "https://app.example.com"},
         }
 
         assert "creditCard" not in body
@@ -258,6 +259,7 @@ async def test_criar_pagamento_cartao_avulso(monkeypatch):
         external_reference="pay-local-card-1",
         descricao="CaixaClaro pro_mensal",
         due_date="2026-10-15",
+        success_url="https://app.example.com",
     )
 
     assert out["id"] == "pay_card_1"
@@ -290,6 +292,7 @@ async def test_criar_pagamento_cartao_avulso_falha_502(monkeypatch):
             external_reference="pay-local-card-1",
             descricao="CaixaClaro pro_mensal",
             due_date="2026-10-15",
+            success_url="https://app.example.com",
         )
 
     assert exc.value.status_code == 502

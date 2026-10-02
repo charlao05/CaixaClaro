@@ -96,7 +96,12 @@ def _mock_asaas(
     monkeypatch.setattr(asaas_mod, "buscar_pix_qrcode", buscar_qrcode)
 
     async def criar_pagamento_cartao(
-        customer_id, valor, external_reference, descricao, due_date
+        customer_id,
+        valor,
+        external_reference,
+        descricao,
+        due_date,
+        success_url,
     ):
         chamadas["criar_pagamento_cartao"].append(
             {
@@ -105,6 +110,7 @@ def _mock_asaas(
                 "external_reference": external_reference,
                 "descricao": descricao,
                 "due_date": due_date,
+                "success_url": success_url,
             }
         )
         return {
@@ -476,6 +482,12 @@ async def test_checkout_cartao_retorna_invoice_url(client, monkeypatch):
     assert chamadas["criar_pagamento"] == []
     assert chamadas["qrcode"] == []
 
+    from caixaclaro.config import settings
+    assert (
+        chamadas["criar_pagamento_cartao"][0]["success_url"]
+        == settings().frontend_url
+    )
+
 
 async def test_checkout_metodo_invalido_400(client, monkeypatch):
     uid = await _criar_usuario(client, "bc2@x.com", "111.444.777-35")
@@ -698,6 +710,12 @@ async def test_http_checkout_cartao_retorna_invoice_url(client, monkeypatch):
     assert len(chamadas["criar_pagamento_cartao"]) == 1
     assert chamadas["criar_pagamento"] == []
     assert chamadas["qrcode"] == []
+
+    from caixaclaro.config import settings
+    assert (
+        chamadas["criar_pagamento_cartao"][0]["success_url"]
+        == settings().frontend_url
+    )
 
 
 async def test_http_checkout_metodo_invalido_422(client, monkeypatch):

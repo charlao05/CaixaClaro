@@ -131,21 +131,29 @@ async def _criar_pagamento(
     external_reference: str,
     descricao: str,
     due_date: str,
+    callback: dict | None = None,
 ) -> dict:
-    """POST /payments com o instrumento informado."""
+    """POST /payments com o instrumento informado.
+
+    'callback' e' opcional; quando presente, mescla no payload. Usado
+    apenas para cartao (successUrl da Invoice hospedada).
+    """
     api_key, base = _config()
+    payload = {
+        "customer": customer_id,
+        "billingType": billing_type,
+        "value": _valor_json(valor),
+        "dueDate": due_date,
+        "description": descricao,
+        "externalReference": external_reference,
+    }
+    if callback is not None:
+        payload["callback"] = callback
     async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
         r = await client.post(
             "/payments",
             headers=_headers(api_key),
-            json={
-                "customer": customer_id,
-                "billingType": billing_type,
-                "value": _valor_json(valor),
-                "dueDate": due_date,
-                "description": descricao,
-                "externalReference": external_reference,
-            },
+            json=payload,
         )
         if r.status_code not in (200, 201):
             logger.warning(
@@ -189,11 +197,14 @@ async def criar_pagamento_cartao_avulso(
     external_reference: str,
     descricao: str,
     due_date: str,
+    success_url: str,
 ) -> dict:
     """POST /payments com billingType=CREDIT_CARD.
 
     O cartao e processado pela Invoice hospedada do Asaas.
     Nenhum dado de cartao entra no CaixaClaro.
+
+    success_url: URL de retorno apos o usuario concluir a Invoice.
     """
     return await _criar_pagamento(
         billing_type="CREDIT_CARD",
@@ -202,6 +213,7 @@ async def criar_pagamento_cartao_avulso(
         external_reference=external_reference,
         descricao=descricao,
         due_date=due_date,
+        callback={"successUrl": success_url},
     )
 
 
