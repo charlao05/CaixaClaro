@@ -212,3 +212,180 @@ async def test_buscar_pix_qrcode(monkeypatch):
     assert "encodedImage" in out
 
 
+
+
+async def test_criar_pagamento_cartao_avulso(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments"
+        assert request.method == "POST"
+
+        body = json.loads(request.content)
+
+        assert body == {
+            "customer": "cus_1",
+            "billingType": "CREDIT_CARD",
+            "value": 29.9,
+            "dueDate": "2026-10-15",
+            "description": "CaixaClaro pro_mensal",
+            "externalReference": "pay-local-card-1",
+        }
+
+        assert "creditCard" not in body
+        assert "creditCardHolderInfo" not in body
+        assert "installmentCount" not in body
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "pay_card_1",
+                "status": "PENDING",
+                "externalReference": "pay-local-card-1",
+                "invoiceUrl": "https://www.asaas.com/i/pay_card_1",
+            },
+        )
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await asaas_mod.criar_pagamento_cartao_avulso(
+        customer_id="cus_1",
+        valor=Decimal("29.90"),
+        external_reference="pay-local-card-1",
+        descricao="CaixaClaro pro_mensal",
+        due_date="2026-10-15",
+    )
+
+    assert out["id"] == "pay_card_1"
+    assert out["status"] == "PENDING"
+    assert out["externalReference"] == "pay-local-card-1"
+    assert out["invoiceUrl"] == "https://www.asaas.com/i/pay_card_1"
+
+
+async def test_criar_pagamento_cartao_avulso_falha_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments"
+        assert request.method == "POST"
+        return httpx.Response(
+            400,
+            json={"errors": [{"description": "Falha no payment"}]},
+        )
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await asaas_mod.criar_pagamento_cartao_avulso(
+            customer_id="cus_1",
+            valor=Decimal("29.90"),
+            external_reference="pay-local-card-1",
+            descricao="CaixaClaro pro_mensal",
+            due_date="2026-10-15",
+        )
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "ASAAS_PAYMENT_CRIAR_FALHOU"
+
+
+async def test_buscar_pagamento_por_id(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments/pay_card_1"
+        assert request.method == "GET"
+        assert request.headers["access_token"] == "asaas-key"
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "pay_card_1",
+                "status": "PENDING",
+                "externalReference": "pay-local-card-1",
+            },
+        )
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await asaas_mod.buscar_pagamento_por_id("pay_card_1")
+
+    assert out == {
+        "id": "pay_card_1",
+        "status": "PENDING",
+        "externalReference": "pay-local-card-1",
+    }
+
+
+async def test_buscar_pagamento_por_id_404_retorna_none(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments/pay_inexistente"
+        assert request.method == "GET"
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await asaas_mod.buscar_pagamento_por_id("pay_inexistente")
+
+    assert out is None
+
+
+async def test_cancelar_pagamento(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments/pay_card_1"
+        assert request.method == "DELETE"
+        assert request.headers["access_token"] == "asaas-key"
+        return httpx.Response(200)
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    out = await asaas_mod.cancelar_pagamento("pay_card_1")
+
+    assert out is None
+
+
+async def test_cancelar_pagamento_falha_502(monkeypatch):
+    _com_credenciais(monkeypatch)
+
+    async def handler(request):
+        assert request.url.path == "/v3/payments/pay_card_1"
+        assert request.method == "DELETE"
+        return httpx.Response(
+            400,
+            json={"errors": [{"description": "Payment nao pode ser removido"}]},
+        )
+
+    monkeypatch.setattr(
+        asaas_mod.httpx,
+        "AsyncClient",
+        _mock_transport(handler),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await asaas_mod.cancelar_pagamento("pay_card_1")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail["erro"] == "ASAAS_PAYMENT_CANCELAR_FALHOU"

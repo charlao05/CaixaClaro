@@ -124,14 +124,15 @@ def _valor_json(valor: Decimal) -> float:
     """
     return float(valor.quantize(Decimal("0.01")))
 
-async def criar_pagamento_pix(
+async def _criar_pagamento(
+    billing_type: str,
     customer_id: str,
     valor: Decimal,
     external_reference: str,
     descricao: str,
     due_date: str,
 ) -> dict:
-    """POST /payments com billingType=PIX. Retorna o payment criado."""
+    """POST /payments com o instrumento informado."""
     api_key, base = _config()
     async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
         r = await client.post(
@@ -139,7 +140,7 @@ async def criar_pagamento_pix(
             headers=_headers(api_key),
             json={
                 "customer": customer_id,
-                "billingType": "PIX",
+                "billingType": billing_type,
                 "value": _valor_json(valor),
                 "dueDate": due_date,
                 "description": descricao,
@@ -162,6 +163,103 @@ async def criar_pagamento_pix(
                 "Falha ao criar payment no Asaas.",
             )
         return r.json()
+
+
+async def criar_pagamento_pix(
+    customer_id: str,
+    valor: Decimal,
+    external_reference: str,
+    descricao: str,
+    due_date: str,
+) -> dict:
+    """POST /payments com billingType=PIX."""
+    return await _criar_pagamento(
+        billing_type="PIX",
+        customer_id=customer_id,
+        valor=valor,
+        external_reference=external_reference,
+        descricao=descricao,
+        due_date=due_date,
+    )
+
+
+async def criar_pagamento_cartao_avulso(
+    customer_id: str,
+    valor: Decimal,
+    external_reference: str,
+    descricao: str,
+    due_date: str,
+) -> dict:
+    """POST /payments com billingType=CREDIT_CARD.
+
+    O cartao e processado pela Invoice hospedada do Asaas.
+    Nenhum dado de cartao entra no CaixaClaro.
+    """
+    return await _criar_pagamento(
+        billing_type="CREDIT_CARD",
+        customer_id=customer_id,
+        valor=valor,
+        external_reference=external_reference,
+        descricao=descricao,
+        due_date=due_date,
+    )
+
+
+async def buscar_pagamento_por_id(payment_id: str) -> dict | None:
+    """GET /payments/{id}. Retorna None quando o payment nao existe."""
+    api_key, base = _config()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        r = await client.get(
+            f"/payments/{payment_id}",
+            headers=_headers(api_key),
+        )
+
+        if r.status_code == 404:
+            return None
+
+        if r.status_code != 200:
+            logger.warning(
+                "asaas_payment_buscar_por_id_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "GET",
+                    "asaas_path": "/payments/{id}",
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
+                },
+            )
+            raise erro(
+                502,
+                "ASAAS_PAYMENT_BUSCAR_FALHOU",
+                "Falha ao buscar payment no Asaas.",
+            )
+
+        return r.json()
+
+
+async def cancelar_pagamento(payment_id: str) -> None:
+    """DELETE /payments/{id}."""
+    api_key, base = _config()
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as client:
+        r = await client.delete(
+            f"/payments/{payment_id}",
+            headers=_headers(api_key),
+        )
+
+        if r.status_code not in (200, 204):
+            logger.warning(
+                "asaas_payment_cancelar_falhou",
+                extra={
+                    "asaas_status": r.status_code,
+                    "asaas_method": "DELETE",
+                    "asaas_path": "/payments/{id}",
+                    "asaas_body_preview": r.content.decode("utf-8", errors="replace")[:500],
+                },
+            )
+            raise erro(
+                502,
+                "ASAAS_PAYMENT_CANCELAR_FALHOU",
+                "Falha ao cancelar payment no Asaas.",
+            )
 
 
 async def buscar_pix_qrcode(payment_id: str) -> dict:
