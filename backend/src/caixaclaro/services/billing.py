@@ -21,6 +21,7 @@ Decimal obrigatorio na fronteira de valor.
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import urlparse
 from uuid import UUID
 
 from ..config import settings
@@ -264,7 +265,7 @@ async def _adotar_ou_criar_asaas(customer_id, valor, plano, external_ref, metodo
             external_reference=external_ref,
             descricao=f"CaixaClaro {plano}",
             due_date=due,
-            success_url=settings().frontend_url,
+            success_url=_success_url_para_asaas(),
         )
     return await asaas.criar_pagamento_pix(
         customer_id=customer_id,
@@ -598,3 +599,17 @@ async def processar_webhook_asaas(conn, payload: dict) -> dict:
 
 
 
+
+
+def _success_url_para_asaas() -> str | None:
+    """URL do frontend para callback do Asaas, ou None quando local.
+
+    O Asaas rejeita callback.successUrl apontando para dominio nao
+    cadastrado no painel da conta. Em dev, FRONTEND_URL e' localhost,
+    entao omitimos o callback; em producao (URL publica), enviamos.
+    """
+    raw = settings().frontend_url
+    host = (urlparse(raw).hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        return None
+    return raw

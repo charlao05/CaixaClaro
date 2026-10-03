@@ -31,11 +31,15 @@ export type BillingStatusResponse = {
   ultimo_payment: UltimoPayment | null
 }
 
+export type MetodoPagamento = 'pix' | 'cartao'
+
 export type CheckoutResponse = {
   payment_id: string
+  metodo: MetodoPagamento
   status: StatusPayment
   pix_qr_code: string | null
   pix_copy_paste: string | null
+  invoice_url: string | null
 }
 
 export type PaymentItem = {
@@ -69,11 +73,12 @@ export function getStatus(token: string): Promise<BillingStatusResponse> {
 export function checkout(
   token: string,
   plano: Plano,
+  metodo: MetodoPagamento,
   idempotencyKey?: string,
 ): Promise<CheckoutResponse> {
   return api<CheckoutResponse>('/billing/checkout', {
     method: 'POST',
-    body: { plano },
+    body: { plano, metodo },
     token,
     idempotencyKey: idempotencyKey ?? novaChave(),
   })

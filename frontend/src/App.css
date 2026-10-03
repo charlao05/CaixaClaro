@@ -1284,3 +1284,59 @@ main.dashboard .pagamentos-lista > li.pagamento-item:last-child {
     text-align: left;
   }
 }
+
+/* E1 B.7.2: seletor de forma de pagamento e botao de checkout de cartao */
+
+.assinatura-metodo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  border: 1.5px solid var(--cc-line);
+  border-radius: var(--cc-radius-sm);
+  background: #ffffff;
+  min-inline-size: 0;
+}
+
+.assinatura-metodo legend {
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cc-ink-soft);
+}
+
+.assinatura-metodo label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--cc-ink);
+  cursor: pointer;
+}
+
+.assinatura-metodo input[type='radio'] {
+  accent-color: var(--cc-mint);
+  cursor: pointer;
+}
+
+:where(#root > main) .assinatura-botao {
+  display: inline-block;
+  padding: 10px 20px;
+  background: var(--cc-mint);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  border: 1.5px solid var(--cc-mint);
+  border-radius: var(--cc-radius-sm);
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+:where(#root > main) .assinatura-botao:hover {
+  background: var(--cc-mint-soft);
+  color: var(--cc-ink);
+  box-shadow: var(--cc-shadow);
+}

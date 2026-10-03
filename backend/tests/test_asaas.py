@@ -392,3 +392,31 @@ async def test_cancelar_pagamento_falha_502(monkeypatch):
 
     assert exc.value.status_code == 502
     assert exc.value.detail["erro"] == "ASAAS_PAYMENT_CANCELAR_FALHOU"
+
+async def test_criar_pagamento_cartao_avulso_sem_callback(monkeypatch):
+    """Rota 2: success_url=None nao envia callback ao Asaas."""
+    _com_credenciais(monkeypatch)
+    capturado = {}
+
+    def handler(request):
+        capturado["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"id": "pay_card_sem_cb", "invoiceUrl": "https://x/i/y"},
+        )
+
+    monkeypatch.setattr(
+        asaas_mod.httpx, "AsyncClient", _mock_transport(handler)
+    )
+
+    out = await asaas_mod.criar_pagamento_cartao_avulso(
+        customer_id="cus_1",
+        valor=Decimal("29.90"),
+        external_reference="ref_1",
+        descricao="CaixaClaro pro_mensal",
+        due_date="2026-10-10",
+        success_url=None,
+    )
+
+    assert out["invoiceUrl"] == "https://x/i/y"
+    assert "callback" not in capturado["body"]

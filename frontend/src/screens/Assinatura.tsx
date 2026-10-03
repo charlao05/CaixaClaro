@@ -8,6 +8,7 @@ import {
   listarPayments,
   type BillingStatusResponse,
   type CheckoutResponse,
+  type MetodoPagamento,
   type PaymentItem,
   type Plano,
   type StatusPayment,
@@ -59,6 +60,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
   const [assinando, setAssinando] = useState<Plano | null>(null)
   const [erroAssinar, setErroAssinar] = useState<string | null>(null)
   const [checkoutAtivo, setCheckoutAtivo] = useState<CheckoutResponse | null>(null)
+  const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
   const [copiado, setCopiado] = useState(false)
 
   const [pausando, setPausando] = useState(false)
@@ -125,7 +127,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
     setErroAssinar(null)
     setAssinando(plano)
     try {
-      const r = await checkout(sessao.token, plano)
+      const r = await checkout(sessao.token, plano, metodo)
       setCheckoutAtivo(r)
     } catch (e) {
       setErroAssinar(msgErro(e))
@@ -210,6 +212,31 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
             <p className="assinatura-nota">
               Valores provisórios; serão definidos antes do lançamento do plano.
             </p>
+            <fieldset className="assinatura-metodo">
+              <legend>Forma de pagamento</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="metodo"
+                  value="pix"
+                  checked={metodo === 'pix'}
+                  onChange={() => setMetodo('pix')}
+                  disabled={assinando !== null}
+                />
+                Pix
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="metodo"
+                  value="cartao"
+                  checked={metodo === 'cartao'}
+                  onChange={() => setMetodo('cartao')}
+                  disabled={assinando !== null}
+                />
+                Cartão
+              </label>
+            </fieldset>
             <div className="assinatura-planos">
               {PLANOS.map((p) => (
                 <button
@@ -256,7 +283,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
         )}
       </section>
 
-      {checkoutAtivo && (
+      {checkoutAtivo && checkoutAtivo.metodo === 'pix' && (
         <section>
           <h2>Pagamento Pix</h2>
           {checkoutAtivo.pix_qr_code && (
@@ -278,6 +305,37 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
                 </button>
               </div>
             </>
+          )}
+          <p className="assinatura-nota">
+            Aguardando confirmação do pagamento... a tela atualiza sozinha.
+          </p>
+        </section>
+      )}
+
+      {checkoutAtivo && checkoutAtivo.metodo === 'cartao' && (
+        <section>
+          <h2>Pagamento com cartão</h2>
+          {checkoutAtivo.invoice_url ? (
+            <>
+              <p>
+                Você será levado à página segura do Asaas para concluir o
+                pagamento. Nenhum dado do cartão passa pelo CaixaClaro.
+              </p>
+              <div className="assinatura-acoes">
+                <a
+                  className="assinatura-botao"
+                  href={checkoutAtivo.invoice_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ir para o pagamento
+                </a>
+              </div>
+            </>
+          ) : (
+            <p role="alert">
+              Não foi possível obter o link de pagamento. Tente novamente.
+            </p>
           )}
           <p className="assinatura-nota">
             Aguardando confirmação do pagamento... a tela atualiza sozinha.

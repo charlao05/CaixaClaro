@@ -485,7 +485,7 @@ async def test_checkout_cartao_retorna_invoice_url(client, monkeypatch):
     from caixaclaro.config import settings
     assert (
         chamadas["criar_pagamento_cartao"][0]["success_url"]
-        == settings().frontend_url
+        is None  # Rota 2: FRONTEND_URL localhost omite callback
     )
 
 
@@ -714,7 +714,7 @@ async def test_http_checkout_cartao_retorna_invoice_url(client, monkeypatch):
     from caixaclaro.config import settings
     assert (
         chamadas["criar_pagamento_cartao"][0]["success_url"]
-        == settings().frontend_url
+        is None  # Rota 2: FRONTEND_URL localhost omite callback
     )
 
 
@@ -739,3 +739,15 @@ async def test_http_checkout_metodo_invalido_422(client, monkeypatch):
     )
 
     assert r.status_code == 422
+
+def test_success_url_para_asaas_url_publica(monkeypatch):
+    """Rota 2: FRONTEND_URL publico -> helper devolve a URL."""
+    from caixaclaro.config import settings
+    from caixaclaro.services.billing import _success_url_para_asaas
+
+    monkeypatch.setenv("FRONTEND_URL", "https://app.caixaclaro.com.br")
+    settings.cache_clear()
+    try:
+        assert _success_url_para_asaas() == "https://app.caixaclaro.com.br"
+    finally:
+        settings.cache_clear()

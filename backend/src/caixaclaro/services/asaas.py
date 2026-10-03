@@ -197,7 +197,7 @@ async def criar_pagamento_cartao_avulso(
     external_reference: str,
     descricao: str,
     due_date: str,
-    success_url: str,
+    success_url: str | None = None,
 ) -> dict:
     """POST /payments com billingType=CREDIT_CARD.
 
@@ -213,7 +213,7 @@ async def criar_pagamento_cartao_avulso(
         external_reference=external_reference,
         descricao=descricao,
         due_date=due_date,
-        callback={"successUrl": success_url},
+        callback=({"successUrl": success_url} if success_url is not None else None),
     )
 
 
