@@ -1340,3 +1340,38 @@ main.dashboard .pagamentos-lista > li.pagamento-item:last-child {
   color: var(--cc-ink);
   box-shadow: var(--cc-shadow);
 }
+/* Login/Register: campo de senha com toggle visibilidade */
+.campo-senha {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.campo-senha input {
+  flex: 1;
+  padding-right: 42px;
+}
+
+.campo-senha-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cc-ink-soft);
+}
+
+.campo-senha-toggle:hover:not(:disabled) {
+  color: var(--cc-ink);
+}
+
+.campo-senha-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
