@@ -287,3 +287,111 @@ COMPROVADOS enquanto tal evidência não existir.
   (docs/M10_DECISAO_2026-08.md, seção "Fora de escopo").
 
 Ver docs/M10_DECISAO_2026-08.md para topologia e decisões de arquitetura.
+
+
+## M11 — Meu Negócio: cadastro, precificação e estoque
+
+Escopo desta entrega: Fase 1 (cadastro de produto/serviço + precificação) e
+Fase 2 (movimentação de estoque manual + consulta de saldo) do plano de 6
+fases discutido para o incremento. Fases 3–6 (ingestão por planilha, alertas
+de estoque via Telegram, contrato de API para ERP/CRM, ingestão por foto/OCR)
+não foram iniciadas — ver "Fora de escopo" abaixo.
+
+A precificação segue Categoria I da consulta institucional ao CRC-ES
+(docs/CONSULTA_CRC_ES.md) e o contrato de comportamento em
+docs/REGRA_ORIENTADOR.md: cálculo puro sobre dado informado, toda saída
+rotulada por estado (calculo/limitacao), recusa explícita quando faltam
+dados. A consulta ao CRC-ES segue PENDENTE de resposta — nenhum cálculo
+além dos quatro itens já descritos nela foi implementado (decisão registrada
+em backend/src/caixaclaro/domain/negocio/precificacao.py, docstring).
+A movimentação de estoque é tratada como Categoria II (consolidação de
+eventos informados pelo usuário — sem inferência a partir de transação
+bancária).
+
+Critérios:
+  - [x] Cadastro de produto/serviço (CRUD) com isolamento por usuário
+        evidência: backend/src/caixaclaro/api/produtos.py +
+        backend/src/caixaclaro/services/produtos.py +
+        backend/migrations/011_negocio.sql (tabela products) +
+        backend/tests/test_produtos.py (8 testes, EXECUTADO: 8 passed)
+  - [x] Precificação Categoria I: diferença preço-custo, margem de
+        contribuição (R$ e %), ponto de equilíbrio (unidades e receita),
+        comparação de até 2 cenários sem indicar preferência
+        evidência: backend/src/caixaclaro/domain/negocio/precificacao.py +
+        backend/src/caixaclaro/services/precificacao.py +
+        backend/src/caixaclaro/api/precificacao.py +
+        backend/tests/test_precificacao_domain.py (12 testes) +
+        backend/tests/test_precificacao.py (8 testes)
+        EXECUTADO: 20 passed. Inclui teste de conformidade explícito com
+        REGRA_ORIENTADOR.md (toda saída rotulada por estado; limitação
+        sempre presente; nenhuma palavra de recomendação na resposta).
+  - [x] Sistema se recusa a calcular quando faltam dados (DadosInsuficientes)
+        em vez de assumir default silencioso
+        evidência: backend/tests/test_precificacao_domain.py::
+        test_recusa_calcular_sem_preco,
+        test_item3_sem_custos_fixos_vira_limitacao_nao_erro
+  - [x] Movimentação de estoque (entrada/saída) com saldo derivado por soma
+        do histórico, nunca armazenado de forma redundante
+        evidência: backend/src/caixaclaro/services/estoque.py
+        (saldo_atual: SUM sobre stock_movements)
+  - [x] Guardrail NUNCA estoque negativo, inclusive em movimento de ajuste
+        evidência: backend/src/caixaclaro/domain/negocio/estoque.py
+        (EstoqueNegativoRecusado) + backend/tests/test_estoque_domain.py
+        (15 execuções: 7 funções + 4 + 4 parametrizadas) +
+        backend/tests/test_estoque.py::
+        test_estoque_negativo_recusado_409 (HTTP 409 real, EXECUTADO)
+  - [x] Idempotência real em POST de movimento (reusa
+        security/idempotency.py já existente, mesmo padrão de /transacoes)
+        evidência: backend/tests/test_estoque.py::
+        test_idempotencia_mesma_chave_nao_duplica_movimento (EXECUTADO)
+  - [x] Trilha de auditoria em audit_log para criação/atualização de
+        produto e registro de movimento
+        evidência: chamadas a registrar_auditoria em
+        backend/src/caixaclaro/services/produtos.py e
+        backend/src/caixaclaro/services/estoque.py
+  - [x] Suíte completa do projeto permanece verde após o incremento
+        EXECUTADO: 521 passed (470 pré-existentes + 51 novos deste
+        milestone), 0 failed. Migration 011 aplicada sobre banco real.
+
+Bugs reais encontrados e corrigidos durante esta entrega (não eram do meu
+código novo isoladamente — ficaram latentes porque nenhum endpoint anterior
+tinha as mesmas condições):
+  - security/audit.py:registrar_auditoria e security/idempotency.py:
+    executar_com_idempotencia esperam user_id como str; o valor retornado
+    por usuario_ativo (api/deps.py) é um asyncpg.pgproto.UUID nativo.
+    A convenção já usada em services/contas.py (_uuid.UUID(str(x))) foi
+    replicada nos pontos de chamada novos — módulos de segurança
+    compartilhados não foram alterados.
+  - main.py:handler_validacao serializava exc.errors() com JSONResponse
+    puro; quando um campo Decimal falha validação (ex.: quantidade=0 com
+    Field(gt=0)), o erro de validação do Pydantic ecoa o valor bruto
+    rejeitado (Decimal), que json.dumps não serializa — 500 em vez de 422.
+    Esta era a primeira rota do projeto com campo Decimal validável, por
+    isso o bug nunca havia aparecido. Corrigido com jsonable_encoder
+    (mesmo utilitário que o handler padrão do FastAPI usa).
+    evidência: backend/src/caixaclaro/main.py +
+    backend/tests/test_estoque.py::test_quantidade_zero_rejeitada
+    (passava a reproduzir o bug antes da correção; passa limpo depois)
+  - Colisão de numeração de migration: 010 já estava ocupado por
+    010_payments_metodo_cancelado.sql (linha B, cartão avulso). Migration
+    deste milestone renumerada para 011_negocio.sql antes de aplicar.
+
+Fora de escopo nesta entrega (declarado, não escondido):
+  - Baixa automática de estoque a partir de uma transação bancária
+    confirmada. Decisão deliberada: inferir produto/quantidade a partir de
+    uma transação sem confirmação explícita do usuário violaria
+    REGRA_ORIENTADOR.md (hipótese virando fato sem confirmação). O vínculo
+    existe no schema (stock_movements.referencia_transacao_id) mas a
+    criação do movimento continua sempre um ato explícito do usuário.
+  - Ingestão de movimentos por planilha, foto/OCR ou API de ERP/CRM
+    (Fases 3–6 do plano original).
+  - Alertas de estoque mínimo/validade via Telegram (depende de Fase 3/4;
+    o canal já existe — services/telegram.py — mas não foi acionado por
+    este módulo).
+  - Endpoint de leitura de pricing_scenarios salvos (a gravação existe e é
+    testada; não há endpoint GET para consultá-los nesta versão).
+  - "receita projetada"/"lucro projetado" a partir de volume_hipotese —
+    deliberadamente fora dos quatro itens já descritos na consulta ao
+    CRC-ES; ver docstring de domain/negocio/precificacao.py.
+  - Deploy: este milestone não foi aplicado em produção (depende de M10.C,
+    que segue NÃO COMPROVADO NO REPOSITÓRIO).

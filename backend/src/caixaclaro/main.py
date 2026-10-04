@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -9,6 +10,7 @@ from .config import settings
 from .db import abrir_pool, fechar_pool
 from .api import auth, billing, contas, perfil, sync, transacoes, webhooks, telegram
 from .api import eval as eval_api
+from .api import estoque, precificacao, produtos
 from .logging_config import setup_logging
 
 
@@ -48,7 +50,7 @@ def criar_app() -> FastAPI:
             content={
                 "erro": "VALIDATION_ERROR",
                 "mensagem": "Dados inválidos.",
-                "detalhes": exc.errors(),
+                "detalhes": jsonable_encoder(exc.errors()),
             },
         )
 
@@ -62,6 +64,9 @@ def criar_app() -> FastAPI:
     app.include_router(billing.router,   prefix="/api/v1/billing",   tags=["billing"])
     app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
     app.include_router(billing.payments_router, prefix="/api/v1/payments", tags=["payments"])
+    app.include_router(produtos.router,     prefix="/api/v1/produtos",     tags=["produtos"])
+    app.include_router(estoque.router,      prefix="/api/v1/produtos",     tags=["estoque"])
+    app.include_router(precificacao.router, prefix="/api/v1/precificacao", tags=["precificacao"])
 
     @app.get("/health")
     async def health():

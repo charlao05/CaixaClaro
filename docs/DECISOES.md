@@ -209,3 +209,53 @@ Escopo efetivamente implementado:
     e ausencia de faixa cruzada
 
 M7 fecha com todos os 4 criterios provados.
+
+
+## 2026-10-03 — M11: Meu Negócio implementado (Fase 1+2)
+
+Incremento do projeto com módulo "Meu Negócio": cadastro de produtos/serviços,
+precificação (Categoria I da consulta ao CRC-ES) e movimentação manual de
+estoque (Categoria II — consolidação de evento informado).
+
+Escopo desta sessão, executado em etapas com evidência real a cada passo:
+  - Migration 011_negocio.sql (products, stock_movements, pricing_scenarios)
+  - domain/negocio/: taxonomia_movimento, estoque, precificacao (puros)
+  - services/: produtos, estoque, precificacao
+  - api/: produtos, estoque, precificacao
+  - main.py: jsonable_encoder no handler de validação + 3 include_router
+  - 51 testes novos distribuídos em 5 arquivos
+
+Decisões de escopo tomadas durante a implementação:
+  - Precificação limitada aos 4 itens já descritos em CONSULTA_CRC_ES.md
+    (Categoria I). volume_hipotese é aceito e persistido, mas não deriva
+    receita/lucro projetado — isso ficaria fora do que já foi submetido ao
+    conselho, e REGRA_ORIENTADOR.md §7 pede revisão antes de ativar
+    funcionalidade na fronteira.
+  - Estoque tratado como Categoria II (consolidação de evento informado).
+    Baixa automática a partir de transação confirmada NÃO foi implementada
+    de propósito: o vínculo (referencia_transacao_id) existe no schema para
+    o futuro, mas criar o movimento continua sempre ato explícito do
+    usuário — o contrário violaria a regra de não transformar hipótese em
+    fato sem confirmação.
+  - Migration numerada 011 (não 010): colisão com
+    010_payments_metodo_cancelado.sql, que já existia no repositório por
+    trabalho concorrente (linha B, cartão avulso).
+
+Bugs pré-existentes expostos e corrigidos (não eram do código novo isolado —
+ver M11 em MILESTONES.md para detalhe técnico completo):
+  - security/idempotency.py e security/audit.py recebendo UUID nativo do
+    asyncpg sem str() nos novos pontos de chamada — corrigido nos call
+    sites, replicando o padrão já usado em services/contas.py. Módulos de
+    segurança compartilhados não foram alterados.
+  - main.py:handler_validacao não serializava Decimal em erro de validação
+    (500 em vez de 422) — primeira rota do projeto com campo Decimal
+    validável a expor isso. Corrigido com jsonable_encoder.
+
+Verificação final desta sessão: suíte completa do projeto, 521 passed,
+0 failed, rodada contra PostgreSQL 16 real com as 11 migrations aplicadas
+em sequência a partir de banco vazio.
+
+Pendente, declarado e não escondido: nada deste milestone foi testado em
+ambiente de produção real (depende de M10.C). Nenhuma das Fases 3–6 do
+plano original (planilha, foto/OCR, API de ERP/CRM, alerta de estoque) foi
+iniciada.
