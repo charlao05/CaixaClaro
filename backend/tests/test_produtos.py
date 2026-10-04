@@ -133,3 +133,69 @@ async def test_campo_extra_rejeitado(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 422
+
+async def test_remover_produto_soft_delete(client):
+    """DELETE marca ativo=false; GET /{id} continua acessivel (nao filtra ativo)."""
+    token = await _registrar(client, "prod-remover")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r = await client.post(
+        "/api/v1/produtos",
+        json={"tipo": "produto", "nome": "Remover"},
+        headers=headers,
+    )
+    produto_id = r.json()["id"]
+
+    r = await client.delete(f"/api/v1/produtos/{produto_id}", headers=headers)
+    assert r.status_code == 204, r.json() if r.text else ""
+
+    # GET /{id} continua funcionando (obter nao filtra ativo)
+    r = await client.get(f"/api/v1/produtos/{produto_id}", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["ativo"] is False
+
+    # GET / (apenas_ativos=True) nao lista mais
+    r = await client.get("/api/v1/produtos", headers=headers)
+    assert all(p["id"] != produto_id for p in r.json()["itens"])
+
+    # GET /?apenas_ativos=false ainda lista
+    r = await client.get(
+        "/api/v1/produtos?apenas_ativos=false", headers=headers,
+    )
+    assert any(p["id"] == produto_id for p in r.json()["itens"])
+
+
+async def test_remover_produto_de_outro_usuario_404(client):
+    token_a = await _registrar(client, "prod-rem-out-a")
+    token_b = await _registrar(client, "prod-rem-out-b")
+
+    r = await client.post(
+        "/api/v1/produtos",
+        json={"tipo": "produto", "nome": "De A"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    produto_id = r.json()["id"]
+
+    r = await client.delete(
+        f"/api/v1/produtos/{produto_id}",
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_remover_produto_inexistente_404(client):
+    token = await _registrar(client, "prod-rem-inex")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r = await client.delete(
+        "/api/v1/produtos/00000000-0000-0000-0000-000000000000",
+        headers=headers,
+    )
+    assert r.status_code == 404
+
+
+async def test_remover_produto_sem_autenticacao_401(client):
+    r = await client.delete(
+        "/api/v1/produtos/00000000-0000-0000-0000-000000000000",
+    )
+    assert r.status_code in (401, 403)

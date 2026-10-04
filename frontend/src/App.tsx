@@ -18,6 +18,7 @@ import ListaTransacoes from './screens/ListaTransacoes'
 import Opiniao from './screens/Opiniao'
 import Contas from './screens/Contas'
 import Assinatura from './screens/Assinatura'
+import Negocio from './screens/Negocio'
 import LandingPage from './landing/LandingPage'
 
 type ViewNaoAutenticado = 'landing' | 'login' | 'register'
@@ -37,6 +38,7 @@ type ViewAutenticado =
   | 'opiniao'
   | 'contas'
   | 'assinatura'
+  | 'negocio'
 
 const VIEW_AUTH_KEY = 'caixaclaro:viewAuth'
 const SELECTED_TX_KEY = 'caixaclaro:selectedTxId'
@@ -51,7 +53,8 @@ function isViewAutenticado(value: string | null): value is ViewAutenticado {
     value === 'transacoes' ||
     value === 'opiniao' ||
     value === 'contas' ||
-    value === 'assinatura'
+    value === 'assinatura' ||
+    value === 'negocio'
   )
 }
 
@@ -158,6 +161,12 @@ export default function App() {
     )
   }
 
+  if (viewAuth === 'negocio') {
+    return (
+      <Negocio sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
+    )
+  }
+
   if (viewAuth === 'perfil') {
     return (
       <Perfil
@@ -217,6 +226,7 @@ export default function App() {
       onTransacoes={() => setViewAuth('transacoes')}
       onContas={() => setViewAuth('contas')}
       onAssinatura={() => setViewAuth('assinatura')}
+      onNegocio={() => setViewAuth('negocio')}
     />
   )
 }

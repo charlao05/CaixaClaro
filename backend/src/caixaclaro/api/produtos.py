@@ -63,3 +63,8 @@ async def atualizar_produto(
     campos = body.model_dump(exclude_unset=True)
     async with conexao() as conn:
         return await produtos_service.atualizar(conn, u["id"], produto_id, campos)
+
+@router.delete("/{produto_id}", status_code=204)
+async def remover_produto(produto_id: str, u: dict = Depends(usuario_ativo)):
+    async with conexao() as conn:
+        await produtos_service.remover(conn, u["id"], produto_id)

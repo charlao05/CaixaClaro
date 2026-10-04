@@ -124,3 +124,37 @@ async def atualizar(
         alvo=product_id, meta={"campos": list(campos.keys())},
     )
     return _serializar(row)
+
+async def remover(
+    conn: asyncpg.Connection, user_id: str, product_id: str
+) -> None:
+    """Soft delete: marca ativo=false. Nao apaga stock_movements nem
+    pricing_scenarios (FKs em cascata/set-null seriam destrutivas).
+
+    Idempotente do ponto de vista do usuario: chamar duas vezes produz
+    o mesmo estado final. Segunda chamada levanta 404 porque o produto
+    deixa de ser acessivel via obter() (que filtra por user_id apenas,
+    sem filtrar ativo) — aqui validamos via SELECT direto.
+    """
+    uid = _uuid.UUID(str(user_id))
+    try:
+        pid = _uuid.UUID(product_id)
+    except ValueError as e:
+        raise erro(404, "PRODUTO_NAO_ENCONTRADO", "Produto não encontrado.") from e
+
+    row = await conn.fetchrow(
+        "SELECT id, ativo FROM products WHERE user_id=$1 AND id=$2",
+        uid, pid,
+    )
+    if row is None:
+        raise erro(404, "PRODUTO_NAO_ENCONTRADO", "Produto não encontrado.")
+
+    await conn.execute(
+        "UPDATE products SET ativo = false, atualizado_em = now() "
+        "WHERE user_id = $1 AND id = $2",
+        uid, pid,
+    )
+    await registrar_auditoria(
+        conn, ator="usuario", acao="produto_removido", user_id=str(user_id),
+        alvo=product_id, meta={},
+    )
