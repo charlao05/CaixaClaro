@@ -20,8 +20,39 @@ from ..security.crypto import cifrar_cpf, hash_cpf
 from ..security.erros import erro
 from ..security.rate_limit import limitador_login, limitador_register
 from ..security.validacao import validar_cpf
+import logging
+import time
+from collections import defaultdict, deque
+from ..services import senha, telegram_bot
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
+
+# Rate limit especifico de reset de senha (IP-based, in-memory).
+# Separado de limitador_login/register para nao misturar semantica.
+_RESET_JANELA_S = 900.0
+_RESET_LIMITE = 5
+_reset_ts: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _rate_limit_reset(chave: str) -> None:
+    agora = time.monotonic()
+    dq = _reset_ts[chave]
+    while dq and agora - dq[0] > _RESET_JANELA_S:
+        dq.popleft()
+    if len(dq) >= _RESET_LIMITE:
+        raise erro(
+            429,
+            "RATE_LIMIT",
+            "Muitas tentativas. Tente novamente em 15 minutos.",
+        )
+    dq.append(agora)
+
+
+def resetar_rate_limit() -> None:
+    """Para testes: limpa o estado do limiter de reset."""
+    _reset_ts.clear()
 _bearer = HTTPBearer(auto_error=True)
 
 
@@ -236,5 +267,117 @@ async def logout(
         raise erro(401, "UNAUTHORIZED")
 
     await revogar_sessao(sid)
+
+    return {"ok": True}
+
+
+class EsqueciSenhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+
+
+class RedefinirSenhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+    codigo: str = Field(min_length=6, max_length=6)
+    nova_senha: str = Field(min_length=8, max_length=72)
+
+
+@router.post("/esqueci-senha", status_code=202)
+async def esqueci_senha(dados: EsqueciSenhaIn, request: Request):
+    """Solicita recuperacao de senha. Resposta sempre 202.
+
+    Se o email existe e tem telegram_chat_id, gera codigo de 6 digitos,
+    salva hash em password_reset_tokens e envia via Telegram (best-effort).
+    Caso contrario, nao faz nada. A resposta e indistinguivel de proposito.
+    """
+    ip = _ip_do_request(request)
+    _rate_limit_reset(f"esqueci:ip:{ip}")
+    email_hash = hash_email(str(dados.email))
+
+    async with conexao() as conn:
+        u = await conn.fetchrow(
+            "SELECT id, telegram_chat_id FROM users WHERE email = $1",
+            dados.email,
+        )
+
+        if u is not None and u["telegram_chat_id"] is not None:
+            codigo = await senha.criar_solicitacao(conn, str(u["id"]))
+            texto = (
+                "CaixaClaro\n"
+                f"Seu codigo de recuperacao: {codigo}\n"
+                "Valido por 15 minutos.\n"
+                "Se voce nao pediu, ignore esta mensagem."
+            )
+            try:
+                await telegram_bot.enviar_mensagem(
+                    int(u["telegram_chat_id"]), texto
+                )
+            except Exception as e:
+                logger.warning(
+                    "reset_telegram_send_failed", extra={"error": str(e)}
+                )
+
+        await registrar_auditoria(
+            conn,
+            ator="sistema",
+            acao="esqueci_senha_solicitado",
+            user_id=str(u["id"]) if u else None,
+            alvo=email_hash,
+            meta={
+                "ip": ip,
+                "tem_telegram": bool(u and u["telegram_chat_id"]),
+            },
+        )
+
+    return {"ok": True}
+
+
+@router.post("/redefinir-senha")
+async def redefinir_senha(dados: RedefinirSenhaIn, request: Request):
+    """Redefine a senha usando codigo de reset.
+
+    Sucesso: troca o hash e revoga todas as sessoes do usuario.
+    Erro: sempre 400 CODIGO_INVALIDO (email inexistente, codigo errado,
+    expirado ou ja usado dao a mesma resposta).
+    """
+    ip = _ip_do_request(request)
+    _rate_limit_reset(f"redefinir:ip:{ip}")
+
+    async with conexao() as conn:
+        u = await conn.fetchrow(
+            "SELECT id FROM users WHERE email = $1",
+            dados.email,
+        )
+        if u is None:
+            raise erro(400, "CODIGO_INVALIDO", "Código inválido ou expirado.")
+
+        uid = u["id"]
+        async with conn.transaction():
+            ok = await senha.consumir_codigo(conn, str(uid), dados.codigo)
+            if not ok:
+                raise erro(
+                    400, "CODIGO_INVALIDO", "Código inválido ou expirado."
+                )
+            await conn.execute(
+                "UPDATE users SET senha_hash = $1, atualizado_em = now() "
+                "WHERE id = $2",
+                hash_senha(dados.nova_senha),
+                uid,
+            )
+            await conn.execute(
+                "UPDATE sessions SET revogada_em = now() "
+                "WHERE user_id = $1 AND revogada_em IS NULL",
+                uid,
+            )
+
+        await registrar_auditoria(
+            conn,
+            ator="usuario",
+            acao="senha_redefinida",
+            user_id=str(uid),
+            alvo=str(uid),
+            meta={"ip": ip},
+        )
 
     return {"ok": True}

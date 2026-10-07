@@ -111,6 +111,8 @@ async def limpar_estado(client):
     from caixaclaro.security import rate_limit
 
     rate_limit.resetar_tudo()
+    from caixaclaro.api import auth as _auth_api
+    _auth_api.resetar_rate_limit()
 
     async with conexao() as conn:
         await conn.execute("DELETE FROM webhook_events")

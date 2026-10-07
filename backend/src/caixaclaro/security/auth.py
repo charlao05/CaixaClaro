@@ -125,3 +125,18 @@ async def usuario_atual(
             raise erro(401, "UNAUTHORIZED")
 
         return dict(user)
+
+
+async def revogar_todas_sessoes(user_id: str) -> int:
+    """Revoga todas as sessoes ativas de um usuario. Retorna quantas foram.
+
+    Usado apos reset de senha: um codigo de reset valido invalida
+    qualquer sessao anterior, forcando novo login em todos os dispositivos.
+    """
+    async with conexao() as conn:
+        result = await conn.execute(
+            "UPDATE sessions SET revogada_em = now() "
+            "WHERE user_id = $1 AND revogada_em IS NULL",
+            uuid.UUID(str(user_id)),
+        )
+    return int(result.split()[-1]) if result else 0

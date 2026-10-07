@@ -52,3 +52,25 @@ export function logout(token: string): Promise<void> {
     token,
   }).then(() => undefined)
 }
+
+
+export type EsqueciSenhaResponse = { ok: true }
+export type RedefinirSenhaResponse = { ok: true }
+
+export function esqueciSenha(email: string): Promise<EsqueciSenhaResponse> {
+  return api<EsqueciSenhaResponse>('/auth/esqueci-senha', {
+    method: 'POST',
+    body: { email },
+  })
+}
+
+export function redefinirSenha(
+  email: string,
+  codigo: string,
+  novaSenha: string,
+): Promise<RedefinirSenhaResponse> {
+  return api<RedefinirSenhaResponse>('/auth/redefinir-senha', {
+    method: 'POST',
+    body: { email, codigo, nova_senha: novaSenha },
+  })
+}

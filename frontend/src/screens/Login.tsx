@@ -6,6 +6,7 @@ import { ApiError } from '../services/api'
 type Props = {
   onLogin: (s: Sessao) => void
   onIrParaRegister: () => void
+  onIrParaEsqueciSenha: () => void
 }
 
 function IconeOlho({ aberto }: { aberto: boolean }) {
@@ -29,7 +30,7 @@ function IconeOlho({ aberto }: { aberto: boolean }) {
   )
 }
 
-export default function Login({ onLogin, onIrParaRegister }: Props) {
+export default function Login({ onLogin, onIrParaRegister, onIrParaEsqueciSenha }: Props) {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
@@ -102,6 +103,15 @@ export default function Login({ onLogin, onIrParaRegister }: Props) {
             </button>
           </div>
         </label>
+        <div className="conta-acoes">
+          <button
+            type="button"
+            onClick={onIrParaEsqueciSenha}
+            disabled={carregando}
+          >
+            Esqueci minha senha
+          </button>
+        </div>
         {erro && <p role="alert">{erro}</p>}
         <button type="submit" disabled={carregando}>
           {carregando ? 'Entrando...' : 'Entrar'}

@@ -9,6 +9,8 @@ import {
 import { logout as apiLogout, type Regime } from './services/auth'
 import Login from './screens/Login'
 import Register from './screens/Register'
+import EsqueciSenha from './screens/EsqueciSenha'
+import RedefinirSenha from './screens/RedefinirSenha'
 import Dashboard from './screens/Dashboard'
 import Ingestao from './screens/Ingestao'
 import Revisao from './screens/Revisao'
@@ -21,12 +23,18 @@ import Assinatura from './screens/Assinatura'
 import Negocio from './screens/Negocio'
 import LandingPage from './landing/LandingPage'
 
-type ViewNaoAutenticado = 'landing' | 'login' | 'register'
+type ViewNaoAutenticado = 'landing' | 'login' | 'register' | 'esqueci-senha' | 'redefinir-senha'
 
 const VIEW_KEY = 'caixaclaro:view'
 
 function isViewNaoAutenticado(value: string | null): value is ViewNaoAutenticado {
-  return value === 'landing' || value === 'login' || value === 'register'
+  return (
+    value === 'landing' ||
+    value === 'login' ||
+    value === 'register' ||
+    value === 'esqueci-senha' ||
+    value === 'redefinir-senha'
+  )
 }
 type ViewAutenticado =
   | 'dashboard'
@@ -78,6 +86,7 @@ export default function App() {
     sessionStorage.setItem(VIEW_KEY, view)
   }, [view])
   const [viewAuth, setViewAuth] = useState<ViewAutenticado>(() => carregarViewAuth())
+  const [emailReset, setEmailReset] = useState('')
   const [selectedTxId, setSelectedTxId] = useState<string | null>(() => carregarSelectedTxId())
 
   useEffect(() => {
@@ -135,10 +144,31 @@ export default function App() {
         />
       )
     }
+    if (view === 'esqueci-senha') {
+      return (
+        <EsqueciSenha
+          onVoltar={() => setView('login')}
+          onCodigoEnviado={(email) => {
+            setEmailReset(email)
+            setView('redefinir-senha')
+          }}
+        />
+      )
+    }
+    if (view === 'redefinir-senha') {
+      return (
+        <RedefinirSenha
+          emailInicial={emailReset}
+          onVoltar={() => setView('login')}
+          onSucesso={() => setView('login')}
+        />
+      )
+    }
     return (
       <Login
         onLogin={setSessao}
         onIrParaRegister={() => setView('register')}
+        onIrParaEsqueciSenha={() => setView('esqueci-senha')}
       />
     )
   }
