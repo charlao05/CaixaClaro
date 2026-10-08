@@ -24,6 +24,37 @@ class Settings(BaseSettings):
     pluggy_webhook_secret:str|None=None
     asaas_webhook_token:str|None=None
     telegram_webhook_secret:str|None=None
+
+    def _representacao_segura(self) -> str:
+        configurados = (
+            f"database_configured={bool(self.database_url)}",
+            f"jwt_configured={bool(self.jwt_secret)}",
+            f"cpf_hmac_configured={bool(self.cpf_hmac_key)}",
+            f"cpf_aes_configured={bool(self.cpf_aes_key)}",
+            f"pluggy_configured={bool(self.pluggy_client_id and self.pluggy_client_secret)}",
+            f"asaas_configured={bool(self.asaas_api_key)}",
+            f"telegram_configured={bool(self.telegram_bot_token)}",
+            f"pluggy_webhook_configured={bool(self.pluggy_webhook_secret)}",
+            f"asaas_webhook_configured={bool(self.asaas_webhook_token)}",
+            f"telegram_webhook_configured={bool(self.telegram_webhook_secret)}",
+        )
+        seguros = (
+            f"ambiente={self.ambiente!r}",
+            f"jwt_expira_minutos={self.jwt_expira_minutos}",
+            f"trial_dias={self.trial_dias}",
+            f"pluggy_base_url={self.pluggy_base_url!r}",
+            f"asaas_base_url={self.asaas_base_url!r}",
+            f"frontend_url={self.frontend_url!r}",
+            f"eval_ultima_execucao_path={self.eval_ultima_execucao_path!r}",
+        )
+        return f"Settings({', '.join(seguros + configurados)})"
+
+    def __repr__(self) -> str:
+        return self._representacao_segura()
+
+    def __str__(self) -> str:
+        return self._representacao_segura()
+
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_minimo(cls,v):

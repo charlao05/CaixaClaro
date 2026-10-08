@@ -254,24 +254,24 @@ saída, em docs/ ou backup/.
 ### M10.C — Operação em ambiente real (natureza C)
 
 Critérios que exigem evidência do ambiente real. O repositório pode
-registrar essa evidência, mas não substitui a execução. Permanecem NÃO
-COMPROVADOS enquanto tal evidência não existir.
+registrar essa evidência, mas não substitui a execução.
 
-- [ ] Deploy em VPS/host real
-      Requer: host provisionado, docker compose -f docker-compose.prod.yml up
-      executado, TLS emitido por Let's Encrypt, webhooks acessíveis
-      publicamente. NÃO COMPROVADO NO REPOSITÓRIO.
+- [x] Deploy em VPS/host real
+      Evidência operacional registrada em
+      docs/OPERACAO_PRODUCAO_2026-10-07.md: VPS Hetzner, domínio
+      meucaixaclaro.com.br, HTTPS via Cloudflare Tunnel e uma única réplica
+      ativa após eliminação da réplica concorrente do Windows.
 - [ ] Backup em execução agendada em produção
-      Requer: cron/systemd timer no host invocando backup-vps.sh e
-      artefatos .tar.gpg em storage remoto. NÃO COMPROVADO NO REPOSITÓRIO.
+      Artefato/script existe em M10.A, mas a execução agendada no host e a
+      presença de artefato remoto recorrente ainda não foram comprovadas.
 - [ ] Observabilidade ativa em produção
-      Mecanismos existem e são testados (M10.A). "Ativa" exige coleta
-      real de logs e alerta funcional quando /readyz cai.
-      NÃO COMPROVADO NO REPOSITÓRIO.
-- [ ] Primeiro usuário real end-to-end
-      Requer registro via UI ou API em produção, com uso real registrado.
-      M8 (fechado em 17f2fa1) deixou de ser bloqueio técnico. Permanece
-      dependência operacional. NÃO COMPROVADO NO REPOSITÓRIO.
+      /readyz existe e é verificável localmente, mas ainda não há monitor
+      externo com alerta funcional comprovado.
+- [~] Primeiro usuário real end-to-end
+      Há E2E real de vinculação Telegram e recuperação de senha em produção.
+      Isso comprova operação de fluxos críticos, mas ainda não equivale a
+      um roteiro completo cobrindo todo o produto. Manter aberto até o
+      primeiro smoke E2E integral ficar registrado.
 
 ### Notas
 
@@ -395,3 +395,27 @@ Fora de escopo nesta entrega (declarado, não escondido):
     CRC-ES; ver docstring de domain/negocio/precificacao.py.
   - Deploy: este milestone não foi aplicado em produção (depende de M10.C,
     que segue NÃO COMPROVADO NO REPOSITÓRIO).
+
+## M12 — Recuperação de senha por Telegram
+
+Escopo: recuperação de acesso por código temporário enviado pelo Telegram,
+com resposta indistinguível na solicitação, uso único do código, expiração,
+revogação de sessões e interface web para redefinição.
+
+Critérios:
+  - [x] Migration 012 cria `password_reset_tokens` sem armazenar o código
+        em claro.
+  - [x] Código de recuperação possui 6 dígitos e validade de 15 minutos.
+  - [x] Nova solicitação invalida a solicitação ativa anterior.
+  - [x] Consumo do código é atômico e de uso único.
+  - [x] Solicitação responde 202 de forma indistinguível para e-mail
+        inexistente e conta sem Telegram.
+  - [x] Reset bem-sucedido troca a senha e revoga sessões ativas.
+  - [x] Frontend possui fluxo "Esqueci minha senha" e "Redefinir senha".
+  - [x] Suíte M12: 547 testes verdes registrados no commit 8f57db0.
+  - [x] E2E real em produção: código entregue no Telegram, senha redefinida,
+        novo login aceito e senha anterior rejeitada.
+
+Limitação conhecida:
+  - O canal inicial é Telegram. Conta sem `telegram_chat_id` não recebe o
+    código. E-mail é um incremento posterior de produto, não parte do M12 v1.

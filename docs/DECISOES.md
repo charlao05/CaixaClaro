@@ -259,3 +259,27 @@ Pendente, declarado e não escondido: nada deste milestone foi testado em
 ambiente de produção real (depende de M10.C). Nenhuma das Fases 3–6 do
 plano original (planilha, foto/OCR, API de ERP/CRM, alerta de estoque) foi
 iniciada.
+
+## 2026-10-07 — M12: recuperação de senha por Telegram
+
+Canal inicial de recuperação de senha é Telegram. O endpoint de solicitação
+responde 202 mesmo quando a conta não existe ou não possui Telegram, para
+não revelar existência da conta.
+
+O código tem 6 dígitos, é armazenado somente como SHA-256, expira em 15
+minutos e é consumido uma única vez. Criar nova solicitação invalida a
+anterior. Após reset bem-sucedido, todas as sessões ativas são revogadas.
+
+O front orienta a vinculação prévia do Telegram. E-mail permanece fora do
+M12 v1.
+
+
+## 2026-10-07 — Operação: Cloudflare Tunnel com uma única réplica
+
+Produção passa a operar com uma única réplica ativa do Cloudflare Tunnel.
+A réplica concorrente que existia no Windows foi retirada do caminho de
+produção após causar distribuição de requisições entre ambientes com bases
+distintas.
+
+Enquanto o Tunnel estiver em uso, HTTPS/TLS pertence à borda da Cloudflare;
+o Caddy local atende o tráfego HTTP interno do compose.
