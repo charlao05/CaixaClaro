@@ -72,9 +72,10 @@ async def test_esqueci_senha_com_telegram_envia(client, monkeypatch):
     assert "codigo" in texto.lower() or "código" in texto.lower()
 
 
-async def test_esqueci_senha_telegram_falha_ainda_202(client, monkeypatch):
+async def test_esqueci_senha_telegram_falha_ainda_202(client, monkeypatch, caplog):
+    marcador = "TEXTO_DE_ERRO_DE_TESTE"
     async def fake_falha(chat_id, texto):
-        raise RuntimeError("telegram down")
+        raise RuntimeError(marcador)
 
     monkeypatch.setattr(telegram_bot, "enviar_mensagem", fake_falha)
     await _registrar(client, "esq-falha", com_telegram=True)
@@ -83,6 +84,8 @@ async def test_esqueci_senha_telegram_falha_ainda_202(client, monkeypatch):
         json={"email": "esq-falha@x.com"},
     )
     assert r.status_code == 202
+    assert "reset_telegram_send_failed" in caplog.text
+    assert marcador not in caplog.text
 
 
 async def test_esqueci_senha_rate_limit(client):
