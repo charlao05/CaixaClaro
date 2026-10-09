@@ -261,17 +261,31 @@ registrar essa evidência, mas não substitui a execução.
       docs/OPERACAO_PRODUCAO_2026-10-07.md: VPS Hetzner, domínio
       meucaixaclaro.com.br, HTTPS via Cloudflare Tunnel e uma única réplica
       ativa após eliminação da réplica concorrente do Windows.
-- [ ] Backup em execução agendada em produção
-      Artefato/script existe em M10.A, mas a execução agendada no host e a
-      presença de artefato remoto recorrente ainda não foram comprovadas.
+- [x] Backup agendado em produção e restauração comprovada
+      Evidência operacional de 2026-10-09: timer diário às 03:00 UTC;
+      objeto diário em R2 (`caixaclaro-20261008T030009Z.tar.gpg`) e seu
+      `.sha256` baixados do bucket `caixaclaro-backup`; `sha256sum -c`
+      retornou OK; arquivo GPG decifrado; `pg_restore` executado em banco
+      separado `restore_test`; 20 tabelas restauradas/listadas. Contagens
+      verificadas de `users`, `accounts`, `transactions`, `products`,
+      `subscriptions` e `sessions` bateram com o snapshot comparável.
+      `audit_log` tinha 49 registros no snapshot e 52 no banco de produção
+      no momento da comparação, diferença temporal de 3 eventos após o dump.
+      Diretório temporário e extração contendo `.env` foram removidos, e a
+      verificação final não encontrou resíduo em `/tmp`. Ver
+      docs/OPERACAO_PRODUCAO_2026-10-07.md.
 - [ ] Observabilidade ativa em produção
       /readyz existe e é verificável localmente, mas ainda não há monitor
       externo com alerta funcional comprovado.
-- [~] Primeiro usuário real end-to-end
-      Há E2E real de vinculação Telegram e recuperação de senha em produção.
-      Isso comprova operação de fluxos críticos, mas ainda não equivale a
-      um roteiro completo cobrindo todo o produto. Manter aberto até o
-      primeiro smoke E2E integral ficar registrado.
+- [x] Primeiro uso real end-to-end
+      Evidência: vinculação do Telegram e recuperação de senha executadas
+      ponta a ponta em produção. O fluxo de reset entregou o código,
+      aceitou-o dentro da validade, redefiniu a senha, permitiu login com
+      a nova senha e rejeitou a senha anterior. Isso fecha o critério de
+      primeiro uso real E2E; não significa certificação exaustiva de todas
+      as telas, integrações ou combinações possíveis. O smoke test ampliado
+      após deploy permanece como hardening operacional, não como substituto
+      do monitor externo que falta para M10.C.
 
 ### Notas
 
@@ -396,8 +410,10 @@ Fora de escopo nesta entrega (declarado, não escondido):
   - Estado de deploy no momento da implementação (2026-10-03): ainda não
     aplicado em produção. Atualização posterior: M11 foi implantado no
     ambiente real em 06–07/10/2026; ver docs/OPERACAO_PRODUCAO_2026-10-07.md.
-    Isso não fecha M10.C integralmente: backup agendado e alerta externo
-    seguem pendentes.
+    Atualização de 2026-10-09: backup diário remoto no R2 e restauração
+    comprovada; o critério M10.C que segue aberto é observabilidade externa
+    com alerta funcional de /readyz. Pendências de reboot/firewall e retirada
+    do serviço redundante no Windows permanecem no hardening operacional.
 
 ## M12 — Recuperação de senha por Telegram
 
