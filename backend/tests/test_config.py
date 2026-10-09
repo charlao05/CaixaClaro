@@ -22,7 +22,7 @@ def test_env_example_tem_todos_os_campos_de_settings():
 def test_repr_e_str_nao_expoem_segredos():
     segredos = {
         "postgresql://user:senha@db:5432/caixaclaro",
-        "jwt-secreto-de-teste",
+        "jwt-secreto-de-teste-com-mais-de-trinta-dois-caracteres",
         "hmac-secreto-de-teste",
         "aes-secreto-de-teste",
         "pluggy-secret",
@@ -36,7 +36,7 @@ def test_repr_e_str_nao_expoem_segredos():
     settings = Settings(
         ambiente="dev",
         database_url="postgresql://user:senha@db:5432/caixaclaro",
-        jwt_secret="jwt-secreto-de-teste",
+        jwt_secret="jwt-secreto-de-teste-com-mais-de-trinta-dois-caracteres",
         cpf_hmac_key="MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         cpf_aes_key="ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=",
         pluggy_client_id="pluggy-id",
