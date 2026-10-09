@@ -5,7 +5,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model_config=SettingsConfigDict(env_file=".env",env_file_encoding="utf-8")
+    model_config=SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", hide_input_in_errors=True)
     ambiente: Literal["dev","staging","prod"]="dev"
     database_url:str
     jwt_secret:str
@@ -42,10 +42,10 @@ class Settings(BaseSettings):
             f"ambiente={self.ambiente!r}",
             f"jwt_expira_minutos={self.jwt_expira_minutos}",
             f"trial_dias={self.trial_dias}",
-            f"pluggy_base_url={self.pluggy_base_url!r}",
-            f"asaas_base_url={self.asaas_base_url!r}",
-            f"frontend_url={self.frontend_url!r}",
-            f"eval_ultima_execucao_path={self.eval_ultima_execucao_path!r}",
+            f"pluggy_base_url_configured={bool(self.pluggy_base_url)}",
+            f"asaas_base_url_configured={bool(self.asaas_base_url)}",
+            f"frontend_url_configured={bool(self.frontend_url)}",
+            f"eval_path_configured={bool(self.eval_ultima_execucao_path)}",
         )
         return f"Settings({', '.join(seguros + configurados)})"
 
