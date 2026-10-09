@@ -393,8 +393,11 @@ Fora de escopo nesta entrega (declarado, não escondido):
   - "receita projetada"/"lucro projetado" a partir de volume_hipotese —
     deliberadamente fora dos quatro itens já descritos na consulta ao
     CRC-ES; ver docstring de domain/negocio/precificacao.py.
-  - Deploy: este milestone não foi aplicado em produção (depende de M10.C,
-    que segue NÃO COMPROVADO NO REPOSITÓRIO).
+  - Estado de deploy no momento da implementação (2026-10-03): ainda não
+    aplicado em produção. Atualização posterior: M11 foi implantado no
+    ambiente real em 06–07/10/2026; ver docs/OPERACAO_PRODUCAO_2026-10-07.md.
+    Isso não fecha M10.C integralmente: backup agendado e alerta externo
+    seguem pendentes.
 
 ## M12 — Recuperação de senha por Telegram
 
