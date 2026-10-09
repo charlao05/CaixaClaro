@@ -5,7 +5,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model_config=SettingsConfigDict(env_file=".env",env_file_encoding="utf-8")
+    model_config=SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", hide_input_in_errors=True)
     ambiente: Literal["dev","staging","prod"]="dev"
     database_url:str
     jwt_secret:str
@@ -24,6 +24,37 @@ class Settings(BaseSettings):
     pluggy_webhook_secret:str|None=None
     asaas_webhook_token:str|None=None
     telegram_webhook_secret:str|None=None
+
+    def _representacao_segura(self) -> str:
+        configurados = (
+            f"database_configured={bool(self.database_url)}",
+            f"jwt_configured={bool(self.jwt_secret)}",
+            f"cpf_hmac_configured={bool(self.cpf_hmac_key)}",
+            f"cpf_aes_configured={bool(self.cpf_aes_key)}",
+            f"pluggy_configured={bool(self.pluggy_client_id and self.pluggy_client_secret)}",
+            f"asaas_configured={bool(self.asaas_api_key)}",
+            f"telegram_configured={bool(self.telegram_bot_token)}",
+            f"pluggy_webhook_configured={bool(self.pluggy_webhook_secret)}",
+            f"asaas_webhook_configured={bool(self.asaas_webhook_token)}",
+            f"telegram_webhook_configured={bool(self.telegram_webhook_secret)}",
+        )
+        seguros = (
+            f"ambiente={self.ambiente!r}",
+            f"jwt_expira_minutos={self.jwt_expira_minutos}",
+            f"trial_dias={self.trial_dias}",
+            f"pluggy_base_url_configured={bool(self.pluggy_base_url)}",
+            f"asaas_base_url_configured={bool(self.asaas_base_url)}",
+            f"frontend_url_configured={bool(self.frontend_url)}",
+            f"eval_path_configured={bool(self.eval_ultima_execucao_path)}",
+        )
+        return f"Settings({', '.join(seguros + configurados)})"
+
+    def __repr__(self) -> str:
+        return self._representacao_segura()
+
+    def __str__(self) -> str:
+        return self._representacao_segura()
+
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_minimo(cls,v):

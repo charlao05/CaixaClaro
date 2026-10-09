@@ -315,7 +315,8 @@ async def esqueci_senha(dados: EsqueciSenhaIn, request: Request):
                 )
             except Exception as e:
                 logger.warning(
-                    "reset_telegram_send_failed", extra={"error": str(e)}
+                    "reset_telegram_send_failed",
+                    extra={"error_type": type(e).__name__},
                 )
 
         await registrar_auditoria(
