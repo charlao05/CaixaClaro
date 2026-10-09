@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from caixaclaro.config import Settings
 
 
@@ -57,5 +60,23 @@ def test_repr_e_str_nao_expoem_segredos():
         assert segredo not in texto_str
 
     assert "ambiente='dev'" in texto
-    assert "frontend_url='http://localhost:5173'" in texto
+    assert "frontend_url_configured=True" in texto
     assert "database_configured=True" in texto
+    assert "pluggy_base_url_configured=True" in texto
+
+
+
+def test_erro_de_validacao_nao_expoe_valor_invalido():
+    valor_invalido = "jwt-invalido-nao-exibir"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            ambiente="dev",
+            database_url="postgresql://user:senha@db:5432/caixaclaro",
+            jwt_secret=valor_invalido,
+            cpf_hmac_key="MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            cpf_aes_key="ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=",
+            frontend_url="http://localhost:5173",
+        )
+
+    assert valor_invalido not in str(exc_info.value)
