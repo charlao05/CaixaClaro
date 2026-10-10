@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Só promete o que o produto envia de fato pelo Telegram: o aviso de faixa do
+# limite anual do MEI (services/notificacoes.py) e o código de redefinição de
+# senha (M12). Não existe aviso de DAS (DECISOES 2026-09-27).
+MENSAGEM_BOAS_VINDAS = (
+    "CaixaClaro conectado. Por aqui chegam os avisos do CaixaClaro — hoje, "
+    "sobre o limite anual do MEI — e o código para redefinir a senha, "
+    "quando você pedir."
+)
+
 
 @router.post("/pluggy")
 async def webhook_pluggy(request: Request):
@@ -158,11 +167,7 @@ async def webhook_telegram(request: Request):
 
     # Envio fora da transacao: falha no Telegram nao desfaz a vinculacao.
     try:
-        await telegram_bot.enviar_mensagem(
-            int(chat_id),
-            "CaixaClaro vinculado com sucesso. "
-            "Você vai receber aqui alertas de faturamento e DAS.",
-        )
+        await telegram_bot.enviar_mensagem(int(chat_id), MENSAGEM_BOAS_VINDAS)
     except Exception as e:
         logger.warning("telegram_welcome_failed", extra={"error": str(e)})
 

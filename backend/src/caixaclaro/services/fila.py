@@ -19,11 +19,14 @@ import json
 
 from ..domain.fiscal.classificacao import (
     PROPOSITOS_VALIDOS,
+    ContextoClassificacao,
+    RegraPessoal,
     dimensoes_padrao,
     normalizar_descricao,
 )
 from ..domain.fiscal.taxonomia import get_categoria
 from .faturamento import conta_faturamento
+from .fiscal import processar_lancamento
 
 
 def _delta_faturamento(
@@ -281,20 +284,58 @@ async def aplicar_a_iguais(
     return aplicados
 
 
-async def lembrar_regra(conn, user_id, referencia: ConfirmacaoResultado) -> bool:
-    """Guarda a resposta como regra pessoal (M4_CONTRATO §5, precedencia 1).
+def _regra_dispensa_pergunta(regra: RegraPessoal, referencia: ConfirmacaoResultado) -> bool:
+    """A regra só é guardada se, na próxima vez, ela de fato evitar a pergunta.
 
-    Nao cria regra para descricao curta demais (casaria com quase tudo) nem
-    para `outros` (a triagem mandaria de volta para a fila de qualquer jeito).
+    Há lançamentos que o CaixaClaro pergunta sempre, por regra de proteção
+    (retirada do negócio para o dono, descrição com cara de imposto). Guardar
+    a resposta nesses casos faria a tela prometer "quando aparecer outro
+    igual, o CaixaClaro já usa esta resposta" e perguntar de novo mesmo assim.
+    """
+    resultado = processar_lancamento(
+        referencia.descricao,
+        referencia.valor,
+        contexto=ContextoClassificacao(personal_rules={}, regras_pessoais=(regra,)),
+    )
+    return (
+        resultado.classificacao.via == "regra_personalizada"
+        and resultado.guardrail.categoria_corrigida == regra.categoria
+        and not resultado.triagem.needs_review
+    )
+
+
+async def lembrar_regra(conn, user_id, referencia: ConfirmacaoResultado) -> bool:
+    """Guarda a resposta como regra pessoal (M4_CONTRATO §5, precedência 1).
+
+    Não cria regra para descrição curta demais (casaria com quase tudo), para
+    `outros` (a triagem mandaria de volta para a fila de qualquer jeito) nem
+    quando uma regra de proteção faria o CaixaClaro perguntar de novo.
     """
     padrao = normalizar_descricao(referencia.descricao)
     if len(padrao) < TAMANHO_MINIMO_PADRAO:
         return False
     if referencia.categoria_nova == "outros":
         return False
+    direcao = _direcao(referencia.valor)
+    regra = RegraPessoal(
+        padrao=padrao,
+        categoria=referencia.categoria_nova,
+        proposito=referencia.proposito_novo,
+        direcao=direcao,
+    )
+    if not _regra_dispensa_pergunta(regra, referencia):
+        return False
+    # Uma regra por (padrão, direção): a resposta nova substitui a anterior
+    # do MESMO sentido e convive com a do sentido oposto. Regra antiga sem
+    # direção valia para os dois sentidos; a resposta nova a substitui.
     await conn.execute(
-        "DELETE FROM personal_rules WHERE user_id = $1 AND regra->>'padrao' = $2",
-        user_id, padrao,
+        """
+        DELETE FROM personal_rules
+         WHERE user_id = $1
+           AND regra->>'padrao' = $2
+           AND (regra->>'direcao' = $3 OR regra->>'direcao' IS NULL)
+        """,
+        user_id, padrao, direcao,
     )
     await conn.execute(
         "INSERT INTO personal_rules (user_id, regra) VALUES ($1, $2::jsonb)",
@@ -303,28 +344,39 @@ async def lembrar_regra(conn, user_id, referencia: ConfirmacaoResultado) -> bool
             "padrao": padrao,
             "categoria": referencia.categoria_nova,
             "proposito": referencia.proposito_novo,
-            "direcao": _direcao(referencia.valor),
+            "direcao": direcao,
         }),
     )
     return True
 
 
-async def carregar_regras(conn, user_id) -> tuple[dict[str, str], dict[str, str]]:
-    """Regras pessoais do usuario: (padrao -> categoria, padrao -> proposito).
+async def carregar_regras(conn, user_id) -> tuple[RegraPessoal, ...]:
+    """Regras pessoais do usuário, na ordem em que devem ser avaliadas.
 
-    Padroes mais longos primeiro, para o mais especifico vencer.
+    Padrões mais longos primeiro, para o mais específico vencer; entre
+    padrões do mesmo tamanho, a resposta mais recente vem antes.
+
+    Cada regra carrega a direção (entrada/saída) do lançamento em que foi
+    aprendida, e `classificar_v2` só a aplica a lançamentos do mesmo sentido.
     """
     rows = await conn.fetch(
-        "SELECT regra FROM personal_rules WHERE user_id = $1 ORDER BY criado_em",
+        "SELECT regra FROM personal_rules WHERE user_id = $1 "
+        "ORDER BY criado_em DESC, id DESC",
         user_id,
     )
-    regras: list[dict] = []
+    regras: list[RegraPessoal] = []
     for r in rows:
         bruto = r["regra"]
         dado = json.loads(bruto) if isinstance(bruto, str) else dict(bruto)
-        if dado.get("padrao") and dado.get("categoria"):
-            regras.append(dado)
-    regras.sort(key=lambda d: len(d["padrao"]), reverse=True)
-    categorias = {d["padrao"]: d["categoria"] for d in regras}
-    propositos = {d["padrao"]: d["proposito"] for d in regras if d.get("proposito")}
-    return categorias, propositos
+        if not (dado.get("padrao") and dado.get("categoria")):
+            continue
+        direcao = dado.get("direcao")
+        regras.append(RegraPessoal(
+            padrao=dado["padrao"],
+            categoria=dado["categoria"],
+            proposito=dado.get("proposito") or None,
+            direcao=direcao if direcao in ("entrada", "saida") else None,
+        ))
+    # sort é estável: preserva "mais recente primeiro" entre tamanhos iguais.
+    regras.sort(key=lambda regra: len(regra.padrao), reverse=True)
+    return tuple(regras)

@@ -100,11 +100,10 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
     importados = 0
     delta_faturamento = Decimal("0")
     data_mais_recente: date | None = None
-    regras, regras_proposito = await carregar_regras(conn, _uuid.UUID(user_id))
     ctx = ContextoClassificacao(
-        personal_rules=regras,
+        personal_rules={},
         regime=regime,
-        personal_propositos=regras_proposito,
+        regras_pessoais=await carregar_regras(conn, _uuid.UUID(user_id)),
     )
 
     for i, l in enumerate(lancamentos):
@@ -225,11 +224,10 @@ async def _operacao_importar(
     importados = 0
     delta_faturamento = Decimal("0")
     data_mais_recente: date | None = None
-    regras, regras_proposito = await carregar_regras(conn, _uuid.UUID(user_id))
     ctx = ContextoClassificacao(
-        personal_rules=regras,
+        personal_rules={},
         regime=regime,
-        personal_propositos=regras_proposito,
+        regras_pessoais=await carregar_regras(conn, _uuid.UUID(user_id)),
     )
 
     for i, l in enumerate(lancamentos):
@@ -719,11 +717,10 @@ async def manual(
 
     async def op(conn):
         uid = _uuid.UUID(str(u["id"]))
-        regras, regras_proposito = await carregar_regras(conn, uid)
         ctx = ContextoClassificacao(
-            personal_rules=regras,
+            personal_rules={},
             regime=u["regime"],
-            personal_propositos=regras_proposito,
+            regras_pessoais=await carregar_regras(conn, uid),
         )
         rf = processar_lancamento(descricao, valor, contexto=ctx)
         cat = rf.guardrail.categoria_corrigida

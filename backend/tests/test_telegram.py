@@ -119,11 +119,16 @@ async def test_telegram_start_envia_confirmacao(client, monkeypatch):
     )
 
     assert r.status_code == 200, r.text
-    enviar.assert_awaited_once_with(
-        55556,
-        "CaixaClaro vinculado com sucesso. "
-        "Você vai receber aqui alertas de faturamento e DAS.",
-    )
+    from caixaclaro.api.webhooks import MENSAGEM_BOAS_VINDAS
+
+    enviar.assert_awaited_once_with(55556, MENSAGEM_BOAS_VINDAS)
+    # A mensagem só promete o que o produto envia: não existe aviso de DAS
+    # (DECISOES 2026-09-27; revisão do M13, achado R2).
+    assert "DAS" not in MENSAGEM_BOAS_VINDAS
+    assert "limite anual do MEI" in MENSAGEM_BOAS_VINDAS
+    assert "redefinir a senha" in MENSAGEM_BOAS_VINDAS
+
+
 async def test_telegram_token_expirado_400(client):
     token_jwt, uid = await _registrar(
         client, "tg3@x.com", "343.343.343-77"

@@ -115,11 +115,10 @@ async def _persistir_transacoes(conn, user_id, account_id, results, regime):
     inseridas = 0
     delta = Decimal("0")
     data_mais_recente = None
-    regras, regras_proposito = await carregar_regras(conn, user_id)
     ctx = ContextoClassificacao(
-        personal_rules=regras,
+        personal_rules={},
         regime=regime,
-        personal_propositos=regras_proposito,
+        regras_pessoais=await carregar_regras(conn, user_id),
     )
 
     for tx in results:

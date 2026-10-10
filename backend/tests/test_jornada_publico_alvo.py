@@ -1,19 +1,18 @@
-"""Jornadas do público-alvo — critérios de aceite de produto (Fase 0).
+"""Jornadas do público-alvo — critérios de aceite de produto.
 
 Cada teste descreve, pela API real, um comportamento que um MEI ou autônomo
 precisa encontrar ao usar o CaixaClaro com um extrato de verdade.
 
-Estado em 2026-10-09 (main @ 2215b7e, PostgreSQL 16): os 12 testes abaixo
-FALHAM. Evidência e contexto em docs/AUDITORIA_JORNADA_2026-10-09.md.
+Histórico: em 2026-10-09, no main @ 2215b7e (PostgreSQL 16), os testes J1 a
+J12 FALHAVAM — evidência e contexto em docs/AUDITORIA_JORNADA_2026-10-09.md.
+O M13 corrigiu os defeitos e todos passam; por isso nenhum carrega mais
+marcador de falha esperada.
 
-Por isso cada um carrega `xfail(strict=True)`:
-  - enquanto o defeito existir, a suíte continua verde e o defeito fica
-    registrado com nome e motivo (não escondido);
-  - quando a correção entrar, o teste passa, o xfail estrito acusa XPASS e
-    a suíte quebra até o marcador ser removido. O status só muda com evidência.
+J4, J8 e J9 pressupõem decisões de contrato registradas na auditoria (D2, D4
+e D5). Se a decisão for revertida, o teste muda junto.
 
-Os testes J4, J8 e J9 pressupõem decisões de contrato ainda NÃO aprovadas
-(D2, D4 e D5 na auditoria). Se a decisão for outra, o teste muda junto.
+J21 a J25 vieram da revisão independente do M13 (seção 8 da auditoria):
+direção das respostas lembradas e isolamento entre contas nas rotas novas.
 """
 import base64
 import uuid
@@ -24,10 +23,7 @@ import pytest
 
 
 CPF = "444.444.440-10"
-
-
-def _falha_conhecida(achado: str, motivo: str):
-    return pytest.mark.xfail(strict=True, reason=f"{achado}: {motivo}")
+CPF_B = "666.666.660-70"
 
 
 def _h(token: str, *, idem: bool = False) -> dict:
@@ -37,10 +33,10 @@ def _h(token: str, *, idem: bool = False) -> dict:
     return h
 
 
-async def _registrar(client, email: str = "jornada@x.com") -> str:
+async def _registrar(client, email: str = "jornada@x.com", cpf: str = CPF) -> str:
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": email, "senha": "senha12345", "cpf": CPF},
+        json={"email": email, "senha": "senha12345", "cpf": cpf},
     )
     assert r.status_code == 201, r.json()
     return r.json()["token"]
@@ -609,3 +605,173 @@ async def test_j20_opcoes_de_resposta_vem_do_backend_e_respeitam_a_taxonomia(cli
         assert opcao["proposito"] in PROPOSITOS_VALIDOS, opcao
     # quem está começando precisa conseguir dizer "gasto pessoal"
     assert any(o["id"] == "gasto_pessoal" for o in corpo["saida"])
+
+
+# ===========================================================================
+# Revisão independente do M13 — direção das respostas lembradas e isolamento
+# ===========================================================================
+
+async def _responder(client, token: str, item: dict, opcao_id: str, lembrar: bool = False):
+    opcao = next(o for o in item["opcoes"] if o["id"] == opcao_id)
+    r = await _confirmar_com(
+        client, token, item["id"],
+        {"categoria": opcao["categoria"], "proposito": opcao["proposito"],
+         "lembrar": lembrar},
+    )
+    assert r.status_code == 200, r.json()
+    return r.json()
+
+
+async def test_j21_resposta_lembrada_respeita_a_direcao_do_dinheiro(client):
+    """Há bancos cuja descrição é igual quando o dinheiro entra e quando sai.
+    A resposta dada a uma saída não pode valer, em silêncio, para uma entrada."""
+    token = await _registrar(client)
+
+    await _colar(client, token, "05/09 PIX TRANSF JOAO S05/10 -100,00")
+    saida = (await _fila(client, token))[0]
+    corpo = await _responder(client, token, saida, "gasto_trabalho", lembrar=True)
+    assert corpo["regra_criada"] is True
+
+    # Entrada com a MESMA descrição: o CaixaClaro tem de perguntar.
+    await _colar(client, token, "06/09 PIX TRANSF JOAO S05/10 300,00")
+    fila = await _fila(client, token)
+    assert len(fila) == 1, fila
+    entrada = fila[0]
+    assert Decimal(entrada["valor"]) == Decimal("300.00")
+    assert entrada["categoria"] == "outros"
+    assert entrada["via"] == "heuristica"
+    assert {o["id"] for o in entrada["opcoes"]} >= {"trabalho", "venda"}
+    assert Decimal((await _resumo(client, token))["faturamento_acumulado"]) == Decimal("0")
+
+    # A pessoa responde a entrada e também pede para lembrar.
+    corpo = await _responder(client, token, entrada, "trabalho", lembrar=True)
+    assert corpo["regra_criada"] is True
+    assert Decimal((await _resumo(client, token))["faturamento_acumulado"]) == Decimal("300.00")
+
+    # As duas respostas convivem: cada sentido recebe a sua, sem perguntar.
+    await _colar(
+        client, token,
+        "07/09 PIX TRANSF JOAO S05/10 -40,00\n08/09 PIX TRANSF JOAO S05/10 250,00",
+    )
+    assert await _fila(client, token) == []
+    por_valor = {Decimal(t["valor"]): t for t in await _transacoes(client, token)}
+    assert por_valor[Decimal("-40.00")]["rotulo"] == "Gasto do trabalho ou negócio"
+    assert por_valor[Decimal("250.00")]["rotulo"] == "Pagamento por trabalho ou serviço"
+    assert Decimal((await _resumo(client, token))["faturamento_acumulado"]) == Decimal("550.00")
+
+
+async def test_j22_nova_resposta_substitui_so_a_do_mesmo_sentido(client):
+    from caixaclaro.db import conexao
+
+    token = await _registrar(client)
+    await _colar(
+        client, token,
+        "05/09 PIX TRANSF JOAO S05/10 -100,00\n06/09 PIX TRANSF JOAO S05/10 300,00",
+    )
+    fila = {Decimal(i["valor"]): i for i in await _fila(client, token)}
+    await _responder(client, token, fila[Decimal("-100.00")], "gasto_trabalho", lembrar=True)
+    await _responder(client, token, fila[Decimal("300.00")], "trabalho", lembrar=True)
+
+    # Muda de ideia sobre a SAÍDA: era gasto pessoal.
+    r = await _corrigir(
+        client, token, fila[Decimal("-100.00")]["id"],
+        {"categoria": "pessoal_prolabore", "proposito": "gasto_pessoal", "lembrar": True},
+    )
+    assert r.status_code == 200, r.json()
+
+    async with conexao() as conn:
+        regras = await conn.fetch(
+            "SELECT regra->>'direcao' AS direcao, regra->>'categoria' AS categoria "
+            "FROM personal_rules ORDER BY 1"
+        )
+    assert [(r["direcao"], r["categoria"]) for r in regras] == [
+        ("entrada", "receita_servico"),
+        ("saida", "pessoal_prolabore"),
+    ]
+
+
+async def test_j23_resposta_lembrada_de_um_usuario_nao_vale_para_outro(client):
+    token_a = await _registrar(client)
+    token_b = await _registrar(client, email="outra@x.com", cpf=CPF_B)
+    linha = "02/09 PIX RECEBIDO CLINICA SORRISO LTDA 300,00"
+
+    # B já tem um lançamento igual esperando resposta.
+    await _colar(client, token_b, linha)
+    await _colar(client, token_a, linha)
+
+    item_a = (await _fila(client, token_a))[0]
+    corpo = await _responder(client, token_a, item_a, "trabalho", lembrar=True)
+    assert corpo["regra_criada"] is True
+    assert corpo["aplicadas_iguais"] == 0  # o pendente de B não é "igual" para A
+
+    fila_b = await _fila(client, token_b)
+    assert len(fila_b) == 1 and fila_b[0]["categoria"] == "outros"
+    assert Decimal((await _resumo(client, token_b))["faturamento_acumulado"]) == Decimal("0")
+
+    # Um lançamento novo de B com a mesma descrição continua indo para a fila.
+    await _colar(client, token_b, "09/09 PIX RECEBIDO CLINICA SORRISO LTDA 300,00")
+    assert len(await _fila(client, token_b)) == 2
+
+
+async def test_j24_ninguem_corrige_nem_le_lancamento_de_outra_conta(client):
+    token_a = await _registrar(client)
+    token_b = await _registrar(client, email="outra@x.com", cpf=CPF_B)
+    await _colar(client, token_a, "10/09 PAGAMENTO DE BOLETO CLARO S.A. -59,90")
+    tx_a = (await _transacoes(client, token_a))[0]
+
+    r = await _corrigir(
+        client, token_b, tx_a["id"],
+        {"categoria": "pessoal_prolabore", "proposito": "gasto_pessoal", "lembrar": True},
+    )
+    assert r.status_code == 404, r.json()
+    assert r.json()["erro"] == "TX_NAO_ENCONTRADA"
+
+    r = await _confirmar_com(client, token_b, tx_a["id"], {"categoria": "outros"})
+    assert r.status_code == 404, r.json()
+
+    r = await client.get(f"/api/v1/transacoes/{tx_a['id']}/opiniao", headers=_h(token_b))
+    assert r.status_code == 404, r.json()
+
+    depois = (await _transacoes(client, token_a))[0]
+    assert depois["categoria"] == tx_a["categoria"]
+    assert depois["confirmada"] is False
+    assert depois["versao"] == tx_a["versao"]
+
+
+async def test_j25_anotacao_manual_fica_so_na_conta_de_quem_anotou(client):
+    token_a = await _registrar(client)
+    token_b = await _registrar(client, email="outra@x.com", cpf=CPF_B)
+
+    r = await _manual(client, token_a, {
+        "data": date.today().isoformat(), "descricao": "Corte de cabelo - cliente Ana",
+        "valor": "50.00", "categoria": "receita_servico",
+    })
+    assert r.status_code == 201, r.json()
+
+    assert await _transacoes(client, token_b) == []
+    resumo_b = await _resumo(client, token_b)
+    assert resumo_b["tem_transacoes"] is False
+    assert Decimal(resumo_b["faturamento_acumulado"]) == Decimal("0")
+    assert Decimal((await _resumo(client, token_a))["faturamento_acumulado"]) == Decimal("50.00")
+
+
+async def test_j26_so_promete_lembrar_quando_vai_mesmo_deixar_de_perguntar(client):
+    """Retirada do negócio para o dono é perguntada sempre (regra de
+    proteção). Pedir para lembrar não pode gerar a promessa "quando aparecer
+    outro igual, o CaixaClaro já usa esta resposta"."""
+    token = await _registrar_como(client, "SIMPLES")
+    await _colar(client, token, "20/09 TRANSF PRO LABORE TITULAR -3.000,00")
+    item = (await _fila(client, token))[0]
+    r = await _confirmar_com(
+        client, token, item["id"], {"categoria": "pessoal_prolabore", "lembrar": True}
+    )
+    assert r.status_code == 200, r.json()
+    assert r.json()["regra_criada"] is False
+    assert "já usa esta resposta" not in r.json()["mensagem"]
+
+    # No mês seguinte o lançamento igual volta para a fila — como a tela disse.
+    await _colar(client, token, "20/10 TRANSF PRO LABORE TITULAR -3.000,00")
+    fila = await _fila(client, token)
+    assert len(fila) == 1
+    for termo in JARGAO_PROIBIDO + ("->", "pessoal_prolabore"):
+        assert termo not in (fila[0]["motivo"] or ""), fila[0]["motivo"]

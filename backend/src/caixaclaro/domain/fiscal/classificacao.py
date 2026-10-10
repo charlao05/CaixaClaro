@@ -14,7 +14,7 @@ A lista corrente (11 valores) está em `PropositoId`.
 """
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
@@ -69,15 +69,33 @@ ViaId = Literal["regra_personalizada", "heuristica", "guardrail", "usuario"]
 
 
 @dataclass(frozen=True)
+class RegraPessoal:
+    """Resposta que o usuário pediu para o CaixaClaro lembrar.
+
+    `direcao` é a direção do lançamento em que a resposta foi dada
+    ("entrada" ou "saida"). Uma resposta dada a uma saída não vale para uma
+    entrada com a mesma descrição, e vice-versa: há bancos cuja descrição é
+    idêntica nos dois sentidos ("PIX TRANSF FULANO"). `None` = vale para os
+    dois sentidos.
+    """
+    padrao: str
+    categoria: str
+    proposito: str | None = None
+    direcao: str | None = None
+
+
+@dataclass(frozen=True)
 class ContextoClassificacao:
+    # Contrato original (M4_CONTRATO §5): padrão -> categoria, sem direção.
     personal_rules: dict[str, str]
     cpf_titular_hash: str | None = None
     cpf_contraparte_hash: str | None = None
     tipo_conta: str | None = None
     regime: str = "MEI"
-    # Propósito associado a cada regra pessoal (mesma chave de personal_rules).
-    # Opcional: regra sem propósito usa o padrão da categoria.
-    personal_propositos: dict[str, str] = field(default_factory=dict)
+    # Regras aprendidas com as respostas do usuário, já na ordem de
+    # avaliação (a primeira que casa vence). Avaliadas antes de
+    # `personal_rules`; as duas têm a mesma precedência sobre a heurística.
+    regras_pessoais: tuple[RegraPessoal, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -290,6 +308,9 @@ _MARCA_SAIDA = ("enviad",)
 _MARCA_ENTRADA = ("recebid", "deposito")
 
 MOTIVO_SEM_EVIDENCIA = "Só pela descrição do extrato não dá para saber o que foi."
+# O motivo pode aparecer na tela de revisão ("Por que o CaixaClaro está
+# perguntando?"); por isso não leva identificador interno de categoria.
+MOTIVO_REGRA_APRENDIDA = "Você já respondeu antes um lançamento com esta descrição."
 
 
 def _conflito_de_direcao(norm: str, valor, categoria: str) -> str | None:
@@ -322,9 +343,45 @@ def _respeitar_direcao(resultado, norm: str, valor):
     )
 
 
+def direcao_do_valor(valor) -> str | None:
+    """Direção do dinheiro pelo sinal do valor: FATO do extrato.
+
+    Zero é tratado como entrada, igual às opções de resposta da revisão.
+    """
+    if valor is None:
+        return None
+    return "saida" if valor < 0 else "entrada"
+
+
+def _regra_vale_para(regra: RegraPessoal, direcao: str | None) -> bool:
+    if regra.direcao is None:
+        return True
+    # Regra com direção só vale quando a direção do lançamento é conhecida
+    # e é a mesma. Na dúvida, não aplica: o lançamento segue para a
+    # heurística e, se for o caso, para a revisão.
+    return direcao is not None and regra.direcao == direcao
+
+
 def classificar_v2(descricao, valor, contexto):
     """Classificação determinística. Sem LLM, sem rede, sem estado."""
     norm = _norm(descricao)
+
+    direcao = direcao_do_valor(valor)
+    for regra in contexto.regras_pessoais:
+        if (
+            regra.categoria in _DEFAULTS
+            and _regra_vale_para(regra, direcao)
+            and _norm(regra.padrao) in norm
+        ):
+            return _respeitar_direcao(
+                _montar(
+                    regra.categoria, via="regra_personalizada",
+                    confianca=0.98, needs_review=False,
+                    motivo=MOTIVO_REGRA_APRENDIDA,
+                    proposito=regra.proposito,
+                ),
+                norm, valor,
+            )
 
     for pattern, cat in contexto.personal_rules.items():
         if cat in _DEFAULTS and _norm(pattern) in norm:
@@ -333,7 +390,6 @@ def classificar_v2(descricao, valor, contexto):
                     cat, via="regra_personalizada", confianca=0.98,
                     needs_review=False,
                     motivo=f"Regra personalizada: {pattern!r} -> {cat!r}",
-                    proposito=contexto.personal_propositos.get(pattern),
                 ),
                 norm, valor,
             )

@@ -117,6 +117,27 @@ _SIGNIFICA_RECEITA = {
     "PF": "É renda do seu trabalho por conta própria, recebida no seu CPF.",
 }
 
+# Pessoa física + "venda de produto": o CaixaClaro não sabe se vender é a
+# atividade da pessoa ou se foi a venda de algo que era dela. O texto declara
+# essa limitação em vez de afirmar "renda do seu trabalho" (REGRA_ORIENTADOR
+# §4: não apresentar como conclusão o que depende de dado que o produto não
+# tem). O main já fazia essa distinção; ela tinha se perdido no M13.
+_SIGNIFICA_VENDA_PF = (
+    "É dinheiro de uma venda, recebido no seu CPF. Vender com frequência, "
+    "para ganhar dinheiro, é uma coisa; vender uma vez algo que era seu é "
+    "outra. O CaixaClaro não sabe qual é o seu caso."
+)
+_PESSOAL_OU_TRABALHO_VENDA_PF = (
+    "Depende: se vender é o seu trabalho, é do trabalho; se era um bem seu, "
+    "é da vida pessoal."
+)
+_IMPOSTO_VENDA_PF = (
+    "Depende do tipo de venda. Venda feita com frequência, como atividade, "
+    "pode entrar no imposto de renda da pessoa. A venda eventual de um bem "
+    "que era seu segue outra regra (ganho de capital), que depende do bem e "
+    "do valor. O CaixaClaro não conclui qual das duas vale para você."
+)
+
 _SIGNIFICA_CUSTO = {
     "MEI": (
         "É um gasto para trabalhar. Ele não diminui o faturamento que conta "
@@ -333,9 +354,13 @@ def generate_tax_opinion(
         leitura = f"Pela descrição, parece ser {o_que}. Você ainda não confirmou."
     fato = f"{direcao} {brl(valor)}. {leitura}"
 
+    venda_no_cpf = categoria == "receita_venda" and reg == "PF"
+
     # 2. O que isso significa
     if proposito in _SIGNIFICA_PROPOSITO:
         interpretacao = _SIGNIFICA_PROPOSITO[proposito]
+    elif venda_no_cpf:
+        interpretacao = _SIGNIFICA_VENDA_PF
     elif categoria in ("receita_servico", "receita_venda"):
         interpretacao = _SIGNIFICA_RECEITA[reg]
     elif categoria == "custo_operacional":
@@ -347,10 +372,14 @@ def generate_tax_opinion(
     relacao = _escolher(
         categoria, proposito, _PESSOAL_OU_TRABALHO_PROPOSITO, _PESSOAL_OU_TRABALHO
     )
+    if venda_no_cpf and proposito not in _PESSOAL_OU_TRABALHO_PROPOSITO:
+        relacao = _PESSOAL_OU_TRABALHO_VENDA_PF
 
     # 4. Tem a ver com imposto?
     if proposito in _IMPOSTO_PROPOSITO:
         tratamento = _IMPOSTO_PROPOSITO[proposito]
+    elif venda_no_cpf:
+        tratamento = _IMPOSTO_VENDA_PF
     elif categoria in ("receita_servico", "receita_venda"):
         tratamento = _IMPOSTO_RECEITA[reg]
     elif categoria == "custo_operacional":
