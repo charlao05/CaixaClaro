@@ -202,11 +202,15 @@ Critérios verificáveis por `arquivo:linha` no repositório.
       evidência: docker-compose.prod.yml (serviço migrator) +
       backend/src/caixaclaro/migration_runner.py
 - [x] Caddyfile roteia /api/*, /healthz, /readyz
-      evidência: Caddyfile
+      evidência: Caddyfile + backend/tests/test_caddyfile.py (leitura do
+      arquivo e Caddy de verdade; adicionado em 2026-10-10)
 - [x] GET /healthz (liveness) existe
-      evidência: backend/src/caixaclaro/main.py
+      evidência: backend/src/caixaclaro/main.py; desde 2026-10-10 responde
+      também a HEAD (backend/tests/test_health.py)
 - [x] GET /readyz (readiness) verifica pool PostgreSQL
-      evidência: backend/src/caixaclaro/main.py
+      evidência: backend/src/caixaclaro/main.py; desde 2026-10-10 responde
+      também a HEAD, e o 503 com o banco fora está sob teste
+      (backend/tests/test_health.py)
 - [x] Logging JSON estruturado existe e é testado
       evidência: backend/src/caixaclaro/logging_config.py +
       backend/tests/test_logging_config.py
@@ -277,6 +281,12 @@ registrar essa evidência, mas não substitui a execução.
 - [ ] Observabilidade ativa em produção
       /readyz existe e é verificável localmente, mas ainda não há monitor
       externo com alerta funcional comprovado.
+      Preparação de 2026-10-10 (não fecha o critério): o que um monitor
+      enxerga em cada situação foi ensaiado fora do servidor e está em
+      docs/OPERACAO_PRODUCAO_2026-10-07.md, atualização de 2026-10-10.
+      Fecha quando estiverem registrados: o monitor configurado (serviço,
+      tipo, endereço, intervalo, canal do alerta), uma queda provocada, o
+      alerta recebido e o aviso de retorno, com os horários.
 - [x] Primeiro uso real end-to-end
       Evidência: vinculação do Telegram e recuperação de senha executadas
       ponta a ponta em produção. O fluxo de reset entregou o código,
@@ -519,7 +529,9 @@ Critérios:
 - [x] Token do bot e CPF fora do log (R9)
       evidência: test_logging_config.py (funções reais com transporte simulado)
 - [x] Limite de tentativas por cliente atrás do Caddy e do Tunnel (R10)
-      evidência: tests/test_ip_cliente.py; Caddy 2.10.2 real com o Caddyfile
+      evidência: tests/test_ip_cliente.py; Caddy 2.10.2 real com o Caddyfile;
+      desde 2026-10-10, tests/test_caddyfile.py (cabeçalho forjado chega
+      substituído; passa em 22 versões do Caddy, da 2.7.0 à 2.11.7)
 - [x] Sessão encerrada volta ao login (R11)
       evidência: navegador 6/6
 - [x] Extratos sobrepostos: aviso de repetidos, apagar e desfazer (R12)
