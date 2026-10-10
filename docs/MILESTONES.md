@@ -490,3 +490,55 @@ Ressalvas (natureza da evidência):
 Fora de escopo, declarado: ver seção 5 da auditoria (calendário de
 obrigações, recuperação por e-mail, páginas legais, exportar/excluir conta,
 medição de uso, navegação com histórico, preço, taxonomia v2).
+
+## M14 — Correções pré-lançamento (revisão de 2026-10-09)
+
+Escopo: corrigir o que a revisão independente do M13 e a auditoria do
+`main` encontraram antes de receber usuários reais. Achados, decisões e o
+que ficou aberto: docs/AUDITORIA_JORNADA_2026-10-09.md, seção 8.
+
+Critérios:
+
+- [x] Resposta lembrada respeita a direção do dinheiro e só promete o que
+      cumpre (R1)
+      evidência: tests/test_regras_pessoais.py; test_jornada_publico_alvo.py
+      ::test_j21, test_j22, test_j26 (falham no M13 original)
+- [x] Texto ao usuário só promete o que existe (R2, R4, card da landing)
+      evidência: test_telegram.py::test_telegram_start_envia_confirmacao;
+      test_tax_opinion.py::test_venda_de_pessoa_fisica_declara_o_que_o_produto_nao_sabe
+- [x] Rotas novas do M13 isoladas por conta (R3)
+      evidência: test_jornada_publico_alvo.py::test_j23 a test_j25
+- [x] Faturamento do ano = soma dos lançamentos do ano; outro ano não
+      corrompe o painel; confirmações antigas entram na soma (R5, R6)
+      evidência: tests/test_faturamento_por_ano.py; tests/test_migracao_013.py;
+      test_sync.py::test_worker_sync_que_atravessa_a_virada_soma_cada_ano
+- [x] Voltar no dia seguinte para pagar funciona; quem já assinou renova
+      pela tela (R7, R8)
+      evidência: test_billing.py (4 testes de R7, situação do acesso);
+      test_autorizacao.py; navegador 28/28
+- [x] Token do bot e CPF fora do log (R9)
+      evidência: test_logging_config.py (funções reais com transporte simulado)
+- [x] Limite de tentativas por cliente atrás do Caddy e do Tunnel (R10)
+      evidência: tests/test_ip_cliente.py; Caddy 2.10.2 real com o Caddyfile
+- [x] Sessão encerrada volta ao login (R11)
+      evidência: navegador 6/6
+- [x] Extratos sobrepostos: aviso de repetidos, apagar e desfazer (R12)
+      evidência: tests/test_lotes.py; navegador 10/10
+- [x] Backup sinaliza falha da cópia no R2 (R13)
+      evidência: script real com stubs (código 2)
+- [x] Suíte completa verde e eval inalterado
+      EXECUTADO em 2026-10-10: 653 passed; eval PASS
+      (A=0, B=1.000, C=0.235, D=0). Frontend: typecheck, build e lint sem
+      erro (2 avisos que já existiam). Jornada completa em navegador
+      (18 telas, 390 px) sem rolagem horizontal e sem erro de API. Cada
+      commit da série também rodado sozinho (suíte, typecheck, lint e eval).
+- [ ] Implantado em produção, com as portas 80 e 443 do VPS sem resposta
+      de fora (IPv4 e IPv6) e a consulta B1 mostrando IPs variados
+- [ ] Token do bot do Telegram trocado e logs antigos tratados
+
+Ressalvas (natureza da evidência):
+
+- Extratos sintéticos; Asaas exercitado por um substituto local; nenhum
+  aparelho real; nada executado em produção.
+- Cadência da renovação e notificações do Asaas ficaram para decisão
+  (seção 8.3 da auditoria).

@@ -308,3 +308,43 @@ e dinheiro de terceiros entram como propósitos (padrão de M8-D3).
 
 Pendente de decisão do responsável pelo produto: preço; taxonomia v2
 (`receita_cpf`); default de regime da API; calendário de obrigações.
+
+## 2026-10-09 — Revisão do M13 e correções pré-lançamento (M14)
+
+Revisão independente do M13 e correção dos defeitos encontrados no `main`,
+registradas em docs/AUDITORIA_JORNADA_2026-10-09.md, seção 8 (achados R1–R13,
+decisões DR1–DR11, um commit por correção). Mudanças de contrato:
+
+- ContextoClassificacao: `regras_pessoais` (regra com direção
+  entrada/saída) substitui o `personal_propositos` introduzido pelo M13.
+  `personal_rules` (M4_CONTRATO §5) não muda.
+- fiscal_state / GET /transacoes/fiscal/resumo: `faturamento_acumulado` é
+  a soma dos lançamentos gravados do ano (M4_CONTRATO §9), não mais um
+  contador por deltas. `ano_referencia` passa a ser o ano mais recente com
+  lançamento, sem passar do ano corrente. Os campos não mudam.
+- Alerta de faixa (M4_CONTRATO §10): avaliado pelo faturamento atual do ano
+  de cada lançamento escrito; inserido se ainda não existir para o prazo.
+- Migration 013: índice transactions(user_id, data) e backfill das
+  confirmações gravadas antes do M13.
+- POST /transacoes/extrato/colar e /importar: campo `possiveis_repetidos`.
+- Rotas novas: DELETE /transacoes/{id}, DELETE /transacoes/lotes/{lote_id},
+  DELETE /transacoes/lotes/{lote_id}/repetidos. Lançamento de origem
+  `pluggy` não é apagado (409 ORIGEM_BANCARIA). Lote inexistente: 404
+  LOTE_NAO_ENCONTRADO. Sem Idempotency-Key (DELETE é idempotente).
+- GET /transacoes/{id}/opiniao: campo `origem`.
+- GET /billing/status: campo `acesso` (liberado, situacao, teste_ate);
+  `ultimo_payment` ganha `plano` e `metodo`. GET /payments: `metodo`.
+- POST /billing/checkout: pendente do mesmo plano fora do prazo local vira
+  `expirado` antes de criar a cobrança nova (auditoria
+  PAGAMENTO_PENDENTE_EXPIRADO).
+- IP do cliente para limite de tentativas e auditoria: o Caddy envia
+  `X-CaixaClaro-Conexao`; `CF-Connecting-IP` só vale quando essa conexão é
+  interna (security/ip_cliente.py).
+- Log: `httpx`/`httpcore` em WARNING; toda linha passa por máscara de token
+  de bot e CPF.
+- backup-vps.sh: código de saída 2 quando a cópia no R2 falha ou não está
+  configurada.
+
+Pendente de decisão do responsável pelo produto: preço; cadência da
+renovação (hoje uma cobrança nova por dia enquanto a assinatura `ativa` não
+é paga); notificações do Asaas; demais itens da seção 8.3 da auditoria.

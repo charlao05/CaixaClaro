@@ -146,6 +146,147 @@ como revisado. Está tudo em `services/tax_opinion.py`.
 
 - Extratos sintéticos. Não substituem extratos reais de bancos reais.
 - As telas **não foram vistas num navegador**: compilam e passam no lint,
-  mas layout e leitura no celular não foram verificados.
+  mas layout e leitura no celular não foram verificados. *(Atualizado na
+  revisão da seção 8: vistas num navegador automatizado em 390 px; não em
+  aparelho real.)*
 - Nada foi executado contra Pluggy, Asaas ou Telegram reais, nem em produção.
 - Sem migration nova; `personal_rules` já existia.
+
+## 8. Revisão independente e correções pré-lançamento (2026-10-09)
+
+Revisão feita sobre `main` @ `2215b7e` com este patch aplicado. Ambiente:
+PostgreSQL 16, Python 3.12, Node 22. Executado: suíte completa do backend,
+eval do golden dataset, typecheck, lint e build do frontend, e as telas num
+Chromium automatizado em 390 px de largura contra a API local. A cobrança
+foi exercitada contra um **servidor local que imita o Asaas** — não é o
+Asaas. Nada foi executado em produção.
+
+Os commits desta série vêm depois do commit do M13, um por correção, para
+que cada um possa ser aprovado ou revertido sozinho. Os identificadores R1
+a R13 abaixo aparecem nas mensagens de commit e nos testes.
+
+### 8.1 Achados e correções
+
+| # | O que acontecia | Evidência antes da correção | O que mudou |
+|---|---|---|---|
+| R1 | Resposta lembrada ignorava a direção do dinheiro: ensinar que a **saída** "PIX TRANSF JOAO" era gasto do trabalho fazia uma **entrada** com a mesma descrição virar gasto, em silêncio, fora da soma. Além disso, "lembrar" uma retirada do negócio prometia "o CaixaClaro já usa esta resposta" e perguntava de novo (regra de proteção). | J21, J22 e J26 falham no M13 original. | Regra por (padrão, direção); só é guardada se dispensar a pergunta; motivo sem identificador interno. |
+| R2 | A boas-vindas do Telegram prometia "alertas de faturamento e DAS". | Texto fixo em `api/webhooks.py`. | Só promete o que existe: aviso de limite do MEI e código de senha. |
+| R3 | Rotas novas sem teste de isolamento entre contas (o comportamento estava certo). | Ausência de teste. | J23 a J25. |
+| R4 | Pessoa física + "venda de produto" recebia "É renda do seu trabalho por conta própria". O produto não sabe se é atividade ou venda de um bem da pessoa; o `main` declarava essa limitação. | Texto em `tax_opinion.py`. | Limitação restaurada em linguagem simples. Continua à espera do contador. |
+| R5 | Lançamento de outro ano corrompia o número do painel: colar 2025 depois de 2026 trocava o painel para 2025 e zerava o acumulado; colagem que atravessa a virada ia toda para o ano novo; no M13, confirmar um Pix do ano anterior fazia o mesmo. | Reproduzido no `main` e no M13: R$ 50.000 viravam R$ 100. | Soma do ano lida de `transactions` (M4 §9: "soma atual das transações"). |
+| R6 | Confirmações gravadas antes do M13 ficavam fora da soma (propósito e patrimônio presos ao palpite). | Leitura do código; nenhuma migration no M13. | Migration 013 alinha essas linhas com a regra do código. |
+| R7 | Voltar no dia seguinte para pagar dava erro 500 (pendente fora do prazo local barrava a cobrança nova no índice único). | `UniqueViolationError payments_pendente_uq`. | Pendente vencido vira `expirado` antes de criar o novo, como o worker já faz. |
+| R8 | Quem já assinou não conseguia renovar pela tela: "Situação: Ativa", só "Pausar assinatura", cobrança da renovação sem QR. | Navegador, assinatura vencida. | Tela por data, "Renovar", "Você tem um pagamento esperando"; `acesso` no status. |
+| R9 | Token do bot do Telegram e CPF iam para o log (linha INFO da biblioteca HTTP). | Funções reais com transporte simulado: token e CPF no log. | `httpx`/`httpcore` em WARNING e máscara em toda linha de log. |
+| R10 | O limite de tentativas tratava todos como um só (a API só enxerga o Caddy). | Local: dois `X-Forwarded-For` diferentes gravados como o mesmo IP; o 6º cadastro da mesma origem recebe 429. Em produção é inferência pelo código e pela topologia documentada; a consulta B1 do relatório de estado é como confirmar (não executada). | IP do cliente pelo cabeçalho do Caddy e pelo `CF-Connecting-IP`, este só quando a conexão vem do conector do Tunnel. |
+| R11 | Sessão encerrada: toda tela mostrava "UNAUTHORIZED". | Navegador, sessão revogada. | Volta ao login com uma frase em português. |
+| R12 | Extratos sobrepostos duplicavam lançamentos, e não havia como apagar. | Semana + mês: 5 lançamentos, soma errada. | Aviso de prováveis repetidos; apagar os repetidos, desfazer a importação, apagar um lançamento. |
+| R13 | Backup terminava com sucesso mesmo com a cópia no R2 falhando. | Script real com stubs: código 0 nos três casos. | Código 2 quando a cópia no R2 falha ou não está configurada. |
+
+Menores, no mesmo espírito: `scripts/bateria_c.py` gerava só CPF inválido;
+estoque devolvia 500 para entrada malformada; o card "Alertas" da landing
+prometia avisos que não existem para quem não é MEI; nenhum cabeçalho de
+segurança na resposta.
+
+### 8.2 Decisões tomadas na revisão (aprovar ou reverter)
+
+Cada uma está num commit próprio. Testado sobre a ponta da série: os
+commits a partir de "Faturamento: a soma do ano…" saem com `git revert` sem
+conflito. Exceção de dependência: "Extratos sobrepostos…" usa funções
+criadas em "Faturamento: a soma do ano…"; reverter este exige reverter
+aquele junto. Os dois commits do M13 são a base de todos os outros.
+
+| # | Decisão | Por quê |
+|---|---|---|
+| DR1 | Resposta lembrada vale só no sentido (entrada/saída) em que foi dada; uma regra por (padrão, direção); `ContextoClassificacao.regras_pessoais` substitui o `personal_propositos` do M13; `personal_rules` (contrato M4 §5) fica igual. | Há bancos cuja descrição é idêntica nos dois sentidos. |
+| DR2 | A regra só é guardada quando vai dispensar a pergunta. | Não prometer o que a regra de proteção desfaz. |
+| DR3 | O faturamento do ano é a soma dos lançamentos gravados daquele ano. `ano_referencia` passa a ser o ano mais recente com lançamento, sem passar do ano corrente (antes: o ano da última escrita). O aviso de faixa é avaliado pelo estado atual do ano e inserido se ainda não existir (M4 §10, ao pé da letra). | O contador por deltas se perdia. |
+| DR4 | Migration 013: índice (user_id, data) e backfill das confirmações antigas. | Sem ela, quem confirmou antes do M13 continuaria fora da soma. |
+| DR5 | Checkout marca o pendente vencido no prazo local como `expirado` antes de criar outro. A cobrança antiga não é cancelada no Asaas; se for paga, o webhook confirma. | Mesma regra do worker (CONTRATOS_INTERNOS §12, item 3). |
+| DR6 | `GET /billing/status` informa `acesso` com a mesma função que libera as rotas; a tela decide pela data, não pelo rótulo `ativa`. | `ativa` quer dizer "habilitada para renovação" (DECISOES 2026-09-26). |
+| DR7 | IP do cliente: o Caddy escreve `X-CaixaClaro-Conexao`; a API usa `CF-Connecting-IP` só quando essa conexão é interna (conector do Tunnel) e só quando a própria conexão da API é interna. | Corrige o limite global. Quem acessa o servidor direto por endereço público não consegue forjar o IP; a ressalva de implantação está em 8.4. |
+| DR8 | 401 em requisição autenticada leva ao login. | Fim do "UNAUTHORIZED". |
+| DR9 | Repetidos: a API conta e avisa; a pessoa apaga. Nada vira identidade por conteúdo. | CONTRATOS_INTERNOS §3 proíbe (data, descrição, valor) como identidade. |
+| DR10 | Backup: código 2 quando a cópia no R2 falha ou não está configurada. | O agendador precisa ver a falha. |
+| DR11 | Cabeçalhos `X-Content-Type-Options`, `X-Frame-Options` e `Referrer-Policy` no Caddy; HSTS e CSP ficam de fora. | Não mudam o funcionamento; HSTS é da borda da Cloudflare, CSP precisa de teste com a Pluggy. |
+
+### 8.3 O que continua aberto (decisão do responsável; a revisão não mexeu)
+
+- **Preço**: o código cobra R$ 29,90 e R$ 299,00 marcados como provisórios.
+- **Cadência da renovação**: com o código real do worker e o substituto do
+  Asaas, uma assinatura `ativa` que não é paga recebe **uma cobrança nova
+  por dia, sem fim** (10 em 10 dias simulados, no `main` e nesta série).
+  As anteriores viram `expirado` só no banco do CaixaClaro; no Asaas, cada
+  uma foi criada com vencimento em 7 dias. Como o Asaas real trata essas
+  cobranças antigas não foi verificado. É o algoritmo de
+  CONTRATOS_INTERNOS §12 (cobra de novo sempre que não há cobrança
+  pendente dentro do prazo local; comportamento 3: "nova cobrança
+  permitida"), combinado com `expira_em` de 24 h e vencimento de 7 dias.
+  Decidir a cadência e quando parar.
+- **Notificações do Asaas**: o cliente é criado sem desligar as
+  notificações. Não é possível determinar daqui se a conta do Asaas manda
+  e-mail a cada cobrança — conferir no painel antes de cobrar gente real,
+  por causa do item anterior.
+- Trocar o token do bot do Telegram e tratar os logs antigos do VPS (R9
+  impede novos vazamentos, não apaga os antigos).
+- Monitor externo; páginas de Privacidade, Termos e Contato; exportar e
+  excluir conta.
+- Sessão de 60 minutos sem renovação (`JWT_EXPIRA_MINUTOS`).
+- Retomar assinatura pausada sem pagar (não há rota).
+- O cadastro revela se o e-mail ou o CPF já têm conta.
+- OFX: usar o `FITID` como identidade deduplicaria o mesmo arquivo sozinho,
+  mas muda CONTRATOS_INTERNOS §3.
+- HSTS (na Cloudflare) e CSP.
+- Webhook do Telegram responde 400 para token inválido.
+- MEI que informa o ano de abertura e traz lançamentos de anos anteriores:
+  o limite cheio é aplicado a esses anos.
+- Para pessoa física, a soma "do que você recebeu por trabalho" inclui o
+  que foi respondido como venda.
+
+### 8.4 Implantação
+
+- Reconstruir as imagens `api` (código e migration 013) e `web` (Caddyfile
+  e frontend). Só a `api` nova, sem o Caddy novo, mantém o limite por IP
+  como antes (sem regressão).
+- O `migrator` aplica a 013 antes da API subir. A consulta B2 do relatório
+  de estado, rodada antes, mostra quantas confirmações antigas estão fora
+  da soma; rodada depois, o que sobrar não se encaixa no critério do
+  backfill e precisa ser visto caso a caso.
+- Depois de implantar: a consulta B1 do relatório de estado deve mostrar IPs
+  variados; a resposta deve trazer `X-Content-Type-Options`; o
+  `systemctl status` do backup passa a mostrar falha quando a cópia no R2
+  falhar. A unidade do agendador do backup não deve usar
+  `Restart=on-failure`.
+- A correção do IP (DR7) confia no `CF-Connecting-IP` quando a conexão com
+  o Caddy vem de endereço interno. Antes de implantar, conferir que as
+  portas 80 e 443 do VPS não respondem de fora, em IPv4 e IPv6: um caminho
+  externo que chegue ao contêiner com endereço interno (por exemplo, IPv6
+  repassado pelo docker-proxy a um contêiner sem IPv6 — inferência sobre o
+  Docker, não verificada no VPS) deixaria quem entra por ali escolher o IP
+  que o limite enxerga. Se responderem, fechar (firewall, ou publicar a
+  porta só em 127.0.0.1 se o cloudflared usa localhost). E se o cloudflared
+  alcançar o Caddy pelo IP público do VPS, o limite continua global, como
+  hoje; a B1 mostra.
+
+### 8.5 Verificação
+
+- Backend: 653 passed (575 do M13 + 78 novos). Eval do golden dataset: PASS,
+  métricas idênticas (A = 0, B = 1,000, C = 0,235, D = 0).
+- Cada commit da série rodado sozinho: suíte do backend (575, 596, 615,
+  624, 629, 640, 640, 650, 650, 651, 653, 653, 653 e 653 passed, do
+  primeiro ao último), typecheck e eval verdes em todos; lint com os mesmos
+  2 avisos de antes em todos; build do frontend no último.
+- Cada correção traz testes. Rodados também contra o código anterior, onde
+  falham: R1 (J21, J22, J26 no M13 original), R7 (4 testes de cobrança) e
+  o gerador do `bateria_c`. R5 e R9 foram reproduzidos antes e depois por
+  roteiro executado com as funções reais. Os demais defeitos foram
+  reproduzidos na auditoria do relatório de estado, antes da correção.
+- Frontend: typecheck e build sem erro; lint com os mesmos 2 avisos de antes.
+- Navegador (Chromium, 390 px): jornada completa de 18 telas sem rolagem
+  horizontal e sem resposta de erro da API; Assinatura 28/28 verificações;
+  sessão encerrada 6/6; extratos sobrepostos 10/10.
+- Caddy 2.10.2 real com o Caddyfile da série: configuração válida;
+  cabeçalho de conexão forjado chega substituído; cabeçalhos de segurança
+  presentes na página e na API.
+- Limites: extratos sintéticos; Asaas substituto; nenhum aparelho real;
+  nada em produção.

@@ -53,6 +53,17 @@ Identidade:
 
 Hash de data/descricao/valor não é identidade.
 
+Atualização da revisão de 2026-10-09 (M13 e M14; detalhes em DECISOES.md):
+- PATCH /transacoes/{id}/corrigir, POST /transacoes/manual,
+  GET /transacoes/opcoes-resposta.
+- Colar e importar devolvem `possiveis_repetidos` (aviso; não é identidade).
+- DELETE /transacoes/{id} (409 ORIGEM_BANCARIA para lançamento do banco
+  conectado), DELETE /transacoes/lotes/{lote_id} e
+  DELETE /transacoes/lotes/{lote_id}/repetidos (lote = paste_id ou
+  import_id; 404 LOTE_NAO_ENCONTRADO).
+- Rotas de transações, alertas e resumo ficam sob /transacoes (por exemplo,
+  /transacoes/fiscal/resumo).
+
 Confirmar exige versao. Divergência → 409 CONFLITO_VERSAO. Mesma decisão já aplicada é no-op, sem updated_at novo. Decisão diferente é nova transição. salvar_regra=true cria regra pessoal; false não remove regra existente. Auditoria registra payload completo.
 
 ## Contas e sync
@@ -117,7 +128,12 @@ Asaas: PIX avulso controlado pelo CaixaClaro.
 
 Payment carrega plano, valor e periodo_dias; subscription não decide período.
 
-Estados locais: pendente, pendente_reconciliacao, confirmado, falhou, expirado.
+Estados locais: pendente, pendente_reconciliacao, confirmado, falhou, expirado, cancelado.
+
+Atualização da revisão de 2026-10-09: GET /billing/status traz `acesso` (liberado,
+situacao, teste_ate) e `ultimo_payment.plano`/`metodo`; GET /payments traz
+`metodo`. Checkout marca o pendente do mesmo plano fora do prazo local como
+`expirado` antes de criar a cobrança nova.
 
 payments.id é enviado como externalReference somente para reconciliação; não é garantia de idempotência externa.
 
