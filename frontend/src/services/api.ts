@@ -33,6 +33,23 @@ type RequestOptions = Omit<RequestInit, 'body' | 'headers'> & {
 
 const API_BASE = '/api/v1'
 
+const MENSAGEM_SESSAO_ENCERRADA = 'Sua sessão terminou. Entre de novo para continuar.'
+
+/**
+ * Chamado quando uma requisição AUTENTICADA volta 401: a sessão expirou (o
+ * token vale 60 minutos e não se renova) ou foi encerrada. Quem cuida da
+ * navegação (App.tsx) registra o que fazer: voltar ao login com uma frase em
+ * português. Antes, cada tela mostrava "UNAUTHORIZED" e o app não saía dali.
+ *
+ * Login e cadastro não mandam token; um 401 deles (senha errada) não passa
+ * por aqui.
+ */
+let aoSessaoEncerrada: (() => void) | null = null
+
+export function definirAoSessaoEncerrada(fn: (() => void) | null): void {
+  aoSessaoEncerrada = fn
+}
+
 function extrairErro(status: number, payload: unknown): ApiErrorBody {
   const fallback: ApiErrorBody = {
     erro: `HTTP_${status}`,
@@ -114,11 +131,15 @@ export async function api<T>(
     : null
 
   if (!response.ok) {
-    throw new ApiError(
+    const sessaoEncerrada = response.status === 401 && Boolean(token)
+    const corpo = extrairErro(response.status, payload)
+    const erro = new ApiError(
       response.status,
-      extrairErro(response.status, payload),
+      sessaoEncerrada ? { ...corpo, mensagem: MENSAGEM_SESSAO_ENCERRADA } : corpo,
       response.headers.get('Retry-After'),
     )
+    if (sessaoEncerrada) aoSessaoEncerrada?.()
+    throw erro
   }
 
   return payload as T
