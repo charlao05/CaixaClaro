@@ -43,6 +43,12 @@ from ..services.fila import (
 )
 from ..services.rotulos import brl, opcoes_para, rotulo
 from ..services.alertas import listar_alertas, marcar_lido
+from ..services.lotes import (
+    apagar_repetidos,
+    apagar_transacao,
+    desfazer_lote,
+    repetidos_do_lote,
+)
 
 from ..domain.fiscal.classificacao import ClassificacaoResultado
 from ..domain.fiscal.guardrails import GuardrailResultado
@@ -166,9 +172,16 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
               "importados": importados},
     )
 
+    # Aviso, não decisão: quantos destes repetem lançamentos de outra origem
+    # (CONTRATOS_INTERNOS §3 proíbe usar data+descrição+valor como identidade).
+    repetidos = (
+        len(await repetidos_do_lote(conn, uid, paste_id)) if importados else 0
+    )
+
     return {
         "paste_id": paste_id,
         "importados": importados,
+        "possiveis_repetidos": repetidos,
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
 
@@ -289,9 +302,14 @@ async def _operacao_importar(
               "n": len(lancamentos), "importados": importados},
     )
 
+    repetidos = (
+        len(await repetidos_do_lote(conn, uid, import_id)) if importados else 0
+    )
+
     return {
         "import_id": import_id,
         "importados": importados,
+        "possiveis_repetidos": repetidos,
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
 
@@ -786,6 +804,61 @@ async def manual(
 
 
 # ============================================================
+# Apagar — DELETE /transacoes/{id}, /lotes/{lote_id}, /lotes/{lote_id}/repetidos
+# ============================================================
+# DELETE é idempotente por natureza (a segunda chamada devolve 404); por isso
+# estas rotas não exigem Idempotency-Key.
+
+@router.delete("/lotes/{lote_id}/repetidos")
+async def apagar_repetidos_endpoint(lote_id: str, u: dict = Depends(usuario_ativo)):
+    """Apaga só os lançamentos de uma colagem/arquivo que repetem outros já
+    existentes (mesma data, valor e descrição). Os de antes ficam."""
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado = await apagar_repetidos(
+                conn, _uuid.UUID(str(u["id"])), lote_id
+            )
+    if resultado is None:
+        raise erro(404, "LOTE_NAO_ENCONTRADO", "Importação não encontrada.")
+    return resultado
+
+
+@router.delete("/lotes/{lote_id}")
+async def desfazer_lote_endpoint(lote_id: str, u: dict = Depends(usuario_ativo)):
+    """Desfaz uma colagem ou um arquivo importado: apaga todos os
+    lançamentos que vieram dele."""
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado = await desfazer_lote(conn, _uuid.UUID(str(u["id"])), lote_id)
+    if resultado is None:
+        raise erro(404, "LOTE_NAO_ENCONTRADO", "Importação não encontrada.")
+    return resultado
+
+
+@router.delete("/{tx_id}")
+async def apagar_transacao_endpoint(tx_id: str, u: dict = Depends(usuario_ativo)):
+    try:
+        tx_uuid = _uuid.UUID(tx_id)
+    except ValueError:
+        raise erro(400, "ID_INVALIDO", "ID da transação inválido")
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado, motivo = await apagar_transacao(
+                conn, _uuid.UUID(str(u["id"])), tx_uuid
+            )
+    if motivo == "nao_encontrada":
+        raise erro(404, "TX_NAO_ENCONTRADA", "Transação não encontrada")
+    if motivo == "origem_bancaria":
+        raise erro(
+            409,
+            "ORIGEM_BANCARIA",
+            "Lançamento do banco conectado não pode ser apagado: ele voltaria "
+            "na próxima sincronização.",
+        )
+    return resultado
+
+
+# ============================================================
 # GET /transacoes/{tx_id}/opiniao — CONTRATOS_INTERNOS §6
 # ============================================================
 
@@ -815,7 +888,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
 
     row = await conn.fetchrow(
         """
-        SELECT t.data, t.descricao_bruta, t.valor, t.categoria, t.categoria_original,
+        SELECT t.data, t.descricao_bruta, t.valor, t.origem, t.categoria, t.categoria_original,
                t.proposito, t.patrimonio, t.tratamento_tributario,
                t.confianca, t.needs_review, t.via, t.confirmado_por,
                u.regime
@@ -880,6 +953,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         "data": row["data"].isoformat(),
         "descricao": row["descricao_bruta"],
         "valor": str(row["valor"]),
+        "origem": row["origem"],
         "rotulo": rotulo(cat_atual, row["proposito"]),
         "opcoes_correcao": list(opcoes_para(row["valor"])),
         "fato": opiniao.fato,

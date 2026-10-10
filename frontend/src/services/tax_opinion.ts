@@ -17,6 +17,7 @@ export type Opiniao = {
   data: string
   descricao: string
   valor: string
+  origem?: string
   rotulo: string
   opcoes_correcao: OpcaoResposta[]
   fato: string

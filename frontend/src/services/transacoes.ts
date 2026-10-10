@@ -25,13 +25,22 @@ export type TransacaoCompleta = TransacaoResumo & {
 export type ColarResponse = {
   paste_id: string
   importados: number
+  // Quantos dos importados repetem lançamentos que já existiam (mesma data,
+  // valor e descrição). É aviso: a pessoa decide se apaga.
+  possiveis_repetidos?: number
   itens: TransacaoResumo[]
 }
 
 export type ImportarResponse = {
   import_id: string
   importados: number
+  possiveis_repetidos?: number
   itens: TransacaoResumo[]
+}
+
+export type ApagadosResponse = {
+  apagados: number
+  ids: string[]
 }
 
 export type FormatoArquivo = 'csv' | 'ofx'
@@ -118,4 +127,23 @@ export function listarTransacoes(
   const qs = params.toString()
   const path = qs ? `/transacoes?${qs}` : '/transacoes'
   return api<Paginado<TransacaoCompleta>>(path, { token })
+}
+
+export function apagarTransacao(token: string, id: string): Promise<ApagadosResponse> {
+  return api<ApagadosResponse>(`/transacoes/${id}`, { method: 'DELETE', token })
+}
+
+// Lote = uma colagem (paste_id) ou um arquivo importado (import_id).
+export function desfazerLote(token: string, loteId: string): Promise<ApagadosResponse> {
+  return api<ApagadosResponse>(`/transacoes/lotes/${encodeURIComponent(loteId)}`, {
+    method: 'DELETE',
+    token,
+  })
+}
+
+export function apagarRepetidos(token: string, loteId: string): Promise<ApagadosResponse> {
+  return api<ApagadosResponse>(
+    `/transacoes/lotes/${encodeURIComponent(loteId)}/repetidos`,
+    { method: 'DELETE', token },
+  )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError } from '../services/api'
 import type { Sessao } from '../services/session'
 import { corrigir, type OpcaoResposta } from '../services/fila'
+import { apagarTransacao } from '../services/transacoes'
 import {
   getOpiniao,
   type GrauCerteza,
@@ -62,6 +63,7 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
   const [escolhendo, setEscolhendo] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
+  const [apagando, setApagando] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -96,6 +98,22 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
       setErro(msgErro(e))
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function handleApagar() {
+    const ok = window.confirm(
+      'Apagar este lançamento? Ele sai da lista e das somas. Não dá para desfazer.',
+    )
+    if (!ok) return
+    setApagando(true)
+    setErro(null)
+    try {
+      await apagarTransacao(sessao.token, txId)
+      onVoltar()
+    } catch (e) {
+      setErro(msgErro(e))
+      setApagando(false)
     }
   }
 
@@ -220,6 +238,14 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
           Esta explicação ajuda você a se organizar e a conversar com um
           contador. Não é apuração de imposto nem substitui um profissional.
         </p>
+
+        {opiniao.origem && opiniao.origem !== 'pluggy' && (
+          <div className="assinatura-acoes">
+            <button type="button" onClick={handleApagar} disabled={apagando || salvando}>
+              {apagando ? 'Apagando...' : 'Apagar este lançamento'}
+            </button>
+          </div>
+        )}
       </section>
     </main>
   )

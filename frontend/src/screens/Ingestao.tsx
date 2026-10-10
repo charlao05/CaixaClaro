@@ -3,7 +3,9 @@ import { ApiError } from '../services/api'
 import type { Sessao } from '../services/session'
 import {
   anotar,
+  apagarRepetidos,
   colar,
+  desfazerLote,
   getOpcoesResposta,
   importar,
   type OpcoesResposta,
@@ -82,6 +84,84 @@ function Resultado({ itens }: { itens: TransacaoResumo[] }) {
   )
 }
 
+type Lote = {
+  id: string
+  importados: number
+  repetidos: number
+}
+
+/**
+ * Depois de colar ou importar: avisa quando parte do que entrou repete
+ * lançamentos que já existiam e deixa a pessoa decidir. O CaixaClaro não
+ * apaga nada sozinho — dois lançamentos iguais no mesmo dia podem ser
+ * diferentes de verdade.
+ */
+function AcoesDoLote({
+  token,
+  lote,
+  onFeito,
+}: {
+  token: string
+  lote: Lote
+  onFeito: (mensagem: string) => void
+}) {
+  const [processando, setProcessando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  if (lote.importados === 0) return null
+
+  async function executar(acao: 'repetidos' | 'tudo') {
+    const pergunta =
+      acao === 'repetidos'
+        ? `Apagar ${lote.repetidos === 1 ? 'o lançamento repetido' : `os ${lote.repetidos} lançamentos repetidos`} desta importação? Os que você já tinha trazido antes continuam.`
+        : `Desfazer esta importação? ${lote.importados === 1 ? 'O lançamento que entrou agora será apagado.' : `Os ${lote.importados} lançamentos que entraram agora serão apagados.`}`
+    if (!window.confirm(pergunta)) return
+    setErro(null)
+    setProcessando(true)
+    try {
+      const r =
+        acao === 'repetidos'
+          ? await apagarRepetidos(token, lote.id)
+          : await desfazerLote(token, lote.id)
+      onFeito(
+        r.apagados === 1
+          ? 'Pronto: 1 lançamento apagado.'
+          : `Pronto: ${r.apagados} lançamentos apagados.`,
+      )
+    } catch (e) {
+      setErro(msgErro(e))
+    } finally {
+      setProcessando(false)
+    }
+  }
+
+  return (
+    <div>
+      {lote.repetidos > 0 && (
+        <p role="status" className="assinatura-aviso">
+          {lote.repetidos === 1
+            ? '1 lançamento parece repetir um que você já tinha trazido'
+            : `${lote.repetidos} lançamentos parecem repetir outros que você já tinha trazido`}{' '}
+          (mesma data, mesmo valor e mesma descrição). Se este extrato cobre
+          dias que você já tinha enviado, apague os repetidos. Se são
+          lançamentos diferentes, pode deixar como está.
+        </p>
+      )}
+      {erro && <p role="alert">{erro}</p>}
+      <div className="assinatura-acoes">
+        {lote.repetidos > 0 && (
+          <button type="button" onClick={() => executar('repetidos')} disabled={processando}>
+            {lote.repetidos === 1 ? 'Apagar o repetido' : `Apagar os ${lote.repetidos} repetidos`}
+          </button>
+        )}
+        <button type="button" onClick={() => executar('tudo')} disabled={processando}>
+          Desfazer esta importação
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function msgErro(e: unknown): string {
   if (e instanceof ApiError) {
     return e.retryAfter
@@ -102,6 +182,8 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
   const [importando, setImportando] = useState(false)
   const [erroImportar, setErroImportar] = useState<string | null>(null)
   const [resImportar, setResImportar] = useState<ImportarResponse | null>(null)
+
+  const [avisoLote, setAvisoLote] = useState<string | null>(null)
 
   const [opcoes, setOpcoes] = useState<OpcoesResposta | null>(null)
   const [direcao, setDirecao] = useState<'entrou' | 'saiu'>('entrou')
@@ -173,6 +255,7 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
     e.preventDefault()
     setErroColar(null)
     setResColar(null)
+    setAvisoLote(null)
     setColando(true)
     try {
       const r = await colar(sessao.token, texto)
@@ -195,6 +278,7 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
     if (!arquivo) return
     setErroImportar(null)
     setResImportar(null)
+    setAvisoLote(null)
     setImportando(true)
     try {
       const b64 = await fileToBase64(arquivo)
@@ -347,12 +431,35 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
         </form>
         {resColar && (
           <div>
-            <p>{resColar.importados === 1 ? '1 lançamento importado.' : `${resColar.importados} lançamentos importados.`}</p>
+            <p>
+              {resColar.importados === 0
+                ? 'Nenhum lançamento novo: este texto já tinha sido enviado.'
+                : resColar.importados === 1
+                  ? '1 lançamento importado.'
+                  : `${resColar.importados} lançamentos importados.`}
+            </p>
+            <AcoesDoLote
+              token={sessao.token}
+              lote={{
+                id: resColar.paste_id,
+                importados: resColar.importados,
+                repetidos: resColar.possiveis_repetidos ?? 0,
+              }}
+              onFeito={(m) => {
+                setResColar(null)
+                setAvisoLote(m)
+              }}
+            />
             <Resultado itens={resColar.itens} />
             <button type="button" onClick={onVoltar}>
               Ver o que precisa da minha resposta
             </button>
           </div>
+        )}
+        {avisoLote && !resColar && !resImportar && (
+          <p role="status" className="revisao-feedback">
+            {avisoLote}
+          </p>
         )}
       </section>
 
@@ -391,6 +498,18 @@ export default function Ingestao({ sessao, onVoltar }: Props) {
         {resImportar && (
           <div>
             <p>{resImportar.importados === 1 ? '1 lançamento importado.' : `${resImportar.importados} lançamentos importados.`}</p>
+            <AcoesDoLote
+              token={sessao.token}
+              lote={{
+                id: resImportar.import_id,
+                importados: resImportar.importados,
+                repetidos: resImportar.possiveis_repetidos ?? 0,
+              }}
+              onFeito={(m) => {
+                setResImportar(null)
+                setAvisoLote(m)
+              }}
+            />
             <Resultado itens={resImportar.itens} />
             <button type="button" onClick={onVoltar}>
               Ver o que precisa da minha resposta
