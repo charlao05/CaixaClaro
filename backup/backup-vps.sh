@@ -107,22 +107,33 @@ log "rotação concluída"
 
 # --- Upload remoto (R2) ----------------------------------------------
 # Requer: /opt/caixaclaro/.rclone.conf (600 root:root) + remote caixaclaro-r2
-# Falha aqui NAO derruba o backup local. Apenas registra WARN.
+# Falha aqui NAO apaga nem desfaz o backup local, que ja foi gravado e
+# rotacionado acima. Mas o script termina com codigo 2: antes ele saia com
+# 0, e o agendador registrava sucesso mesmo com a copia fora do VPS falhando
+# todo dia (revisao de 2026-10-09, achado R13).
+#   0 = backup local e copia no R2 ok
+#   1 = backup local falhou (fail acima)
+#   2 = backup local ok, copia no R2 falhou ou nao configurada
+# A unidade do agendador nao deve usar Restart=on-failure: cada reinicio
+# geraria mais um backup.
 RCLONE_CONF="/opt/caixaclaro/.rclone.conf"
 RCLONE_REMOTE="caixaclaro-r2:caixaclaro-backup"
+EXIT_UPLOAD_FALHOU=2
 
-if [ -f "$RCLONE_CONF" ]; then
-  if rclone --config "$RCLONE_CONF" copy "$BACKUP_ROOT" "$RCLONE_REMOTE" \
-       --include "*.tar.gpg" \
-       --include "*.tar.gpg.sha256" \
-       --log-level ERROR \
-       2>&1; then
-    log "OK upload R2 ($RCLONE_REMOTE)"
-  else
-    log "WARN upload R2 falhou; backup local preservado"
-  fi
+if [ ! -f "$RCLONE_CONF" ]; then
+  log "FAIL rclone config ausente ($RCLONE_CONF); copia no R2 NAO feita; backup local preservado" >&2
+  exit "$EXIT_UPLOAD_FALHOU"
+fi
+
+if rclone --config "$RCLONE_CONF" copy "$BACKUP_ROOT" "$RCLONE_REMOTE" \
+     --include "*.tar.gpg" \
+     --include "*.tar.gpg.sha256" \
+     --log-level ERROR \
+     2>&1; then
+  log "OK upload R2 ($RCLONE_REMOTE)"
 else
-  log "WARN rclone config ausente; upload R2 ignorado"
+  log "FAIL upload R2 falhou; backup local preservado" >&2
+  exit "$EXIT_UPLOAD_FALHOU"
 fi
 
 exit 0
