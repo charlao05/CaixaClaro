@@ -18,6 +18,7 @@ Do host Windows, se o .env usa o hostname interno "db":
   $env:DATABASE_URL="postgresql://caixaclaro:dev_only_change_me@localhost:5432/caixaclaro"
 """
 import asyncio
+import random
 import sys
 import time
 import uuid
@@ -39,8 +40,24 @@ POLL_TIMEOUT = 60.0
 
 
 def _cpf_sintetico() -> str:
-    d = str(int(uuid.uuid4().hex, 16) % 10)
-    return f"{d*3}.{d*3}.{d*3}-{d*2}"
+    """CPF aleatório com dígitos verificadores válidos.
+
+    Desde 2026-09-30 o cadastro recusa CPF inválido e CPF de dígitos
+    repetidos (security/validacao.py); o gerador antigo produzia só
+    "ddd.ddd.ddd-dd" com o mesmo dígito e a bateria parava no cadastro
+    (revisão de 2026-10-09, item 27 do relatório de estado).
+    """
+    rnd = random.SystemRandom()
+    while True:
+        base = [rnd.randrange(10) for _ in range(9)]
+        if len(set(base)) > 1:
+            break
+    for peso_inicial in (10, 11):
+        soma = sum(d * (peso_inicial - i) for i, d in enumerate(base))
+        resto = soma % 11
+        base.append(0 if resto < 2 else 11 - resto)
+    s = "".join(map(str, base))
+    return f"{s[:3]}.{s[3:6]}.{s[6:9]}-{s[9:]}"
 
 
 async def _criar_usuario(client: httpx.AsyncClient) -> str:
