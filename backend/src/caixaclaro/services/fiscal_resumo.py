@@ -1,8 +1,12 @@
-"""Resumo fiscal — leitura de fiscal_state + alerts.
+"""Resumo fiscal — soma dos lancamentos do ano + alerts.
 
 Deriva de M4_CONTRATO §9 (estado) e §10 (faixas).
 
 Retorna um payload pronto para o frontend. Nao escreve nada — so leitura.
+
+O numero do painel e somado na hora, direto de `transactions` (a soma do
+ano de referencia). `fiscal_state` guarda so o retrato da ultima avaliacao;
+daqui se le dele apenas `ultima_avaliacao_em`.
 
 2026-10-09: o resumo passou a respeitar o perfil do usuario. O limite anual
 so existe para MEI (e e proporcional no ano de abertura); para Simples e
@@ -14,14 +18,20 @@ usuario trouxe, sem classificacao.
 """
 import json
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 
-from .faturamento import FAIXAS, TETO_MEI_ANUAL, teto_do_ano
+from .faturamento import (
+    FAIXAS,
+    TETO_MEI_ANUAL,
+    calcular_banda,
+    ano_de_referencia,
+    somar_faturamento_do_ano,
+    teto_do_ano,
+)
 
 
 def _load_estado(raw) -> dict:
-    """Mesma normalizacao de services/faturamento._load_estado."""
+    """asyncpg devolve JSONB como str por padrao; normaliza para dict."""
     if raw is None:
         return {}
     if isinstance(raw, str):
@@ -79,11 +89,10 @@ async def resumo(conn, user_id) -> dict:
         user_id,
     )
     estado = _load_estado(row["estado"]) if row else {}
-
-    fat_str = estado.get("faturamento_acumulado", "0")
-    faturamento = Decimal(str(fat_str))
-    ano_ref = estado.get("ano_referencia", date.today().year)
     ultima = estado.get("ultima_avaliacao_em")
+
+    ano_ref = await ano_de_referencia(conn, user_id)
+    faturamento = await somar_faturamento_do_ano(conn, user_id, ano_ref)
 
     perfil = await conn.fetchrow(
         "SELECT regime, mes_abertura_mei, ano_abertura_mei "
@@ -107,7 +116,7 @@ async def resumo(conn, user_id) -> dict:
     )
     faixas = _faixas_atingidas(faturamento, teto)
     proxima = _proxima_faixa(faturamento, faixas)
-    banda = estado.get("banda_atual") if teto is not None else None
+    banda = calcular_banda(faturamento, teto)
 
     alertas_nao_lidos = await conn.fetchval(
         "SELECT COUNT(*) FROM alerts WHERE user_id = $1 AND lido_em IS NULL",

@@ -13,16 +13,20 @@ tick — mesma janela usada em security/idempotency.py.
 
 Classificacao fiscal: segue o padrao de POST /transacoes/extrato/colar
 (api/transacoes.py) — classifica cada transacao com processar_lancamento,
-acumula delta_faturamento e chama atualizar_fiscal_state UMA VEZ ao fim
-do sync. Consistente com o criterio M4 "fiscal_state atualizado no mesmo
-passo da ingestao".
+acumula o delta de faturamento por ano e reavalia fiscal_state UMA VEZ ao
+fim do sync. Consistente com o criterio M4 "fiscal_state atualizado no
+mesmo passo da ingestao".
 """
 from datetime import date
 from decimal import Decimal
 
 from ..domain.fiscal.classificacao import ContextoClassificacao
 from ..security.audit import registrar_auditoria
-from ..services.faturamento import atualizar_fiscal_state, conta_faturamento
+from ..services.faturamento import (
+    acumular_por_ano,
+    atualizar_fiscal_state_por_ano,
+    conta_faturamento,
+)
 from ..services.notificacoes import enviar_alertas_telegram
 from . import pluggy
 from .fila import carregar_regras
@@ -106,15 +110,14 @@ def _normalizar_data(valor):
 async def _persistir_transacoes(conn, user_id, account_id, results, regime):
     """Upsert de transacoes Pluggy + classificacao fiscal.
 
-    Retorna (inseridas, delta_faturamento, data_mais_recente).
+    Retorna (inseridas, deltas_por_ano).
 
     Segue o padrao de POST /transacoes/extrato/colar: classifica cada
-    transacao com processar_lancamento e acumula delta. O caller e que
-    chama atualizar_fiscal_state uma vez no fim.
+    transacao com processar_lancamento e acumula o delta no ano da propria
+    data. O caller e que reavalia fiscal_state uma vez no fim.
     """
     inseridas = 0
-    delta = Decimal("0")
-    data_mais_recente = None
+    deltas_por_ano: dict[int, Decimal] = {}
     ctx = ContextoClassificacao(
         personal_rules={},
         regime=regime,
@@ -167,11 +170,9 @@ async def _persistir_transacoes(conn, user_id, account_id, results, regime):
         if row is not None:
             inseridas += 1
             if conta_faturamento(c.patrimonio, cat, valor):
-                delta += valor
-                if data_mais_recente is None or data > data_mais_recente:
-                    data_mais_recente = data
+                acumular_por_ano(deltas_por_ano, data, valor)
 
-    return inseridas, delta, data_mais_recente
+    return inseridas, deltas_por_ano
 
 
 async def processar_um_sync(conn, worker_id: str) -> bool:
@@ -189,13 +190,12 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
     try:
         cursor = None
         total_inseridas = 0
-        delta_total = Decimal("0")
-        data_mais_recente = None
+        deltas_por_ano: dict[int, Decimal] = {}
         while True:
             payload = await pluggy.listar_transactions(
                 sync["provider_account_id"], cursor=cursor
             )
-            inseridas, delta, data = await _persistir_transacoes(
+            inseridas, deltas = await _persistir_transacoes(
                 conn,
                 sync["user_id"],
                 sync["account_id"],
@@ -203,21 +203,18 @@ async def processar_um_sync(conn, worker_id: str) -> bool:
                 sync["regime"],
             )
             total_inseridas += inseridas
-            delta_total += delta
-            if data is not None:
-                if data_mais_recente is None or data > data_mais_recente:
-                    data_mais_recente = data
+            for ano, delta in deltas.items():
+                deltas_por_ano[ano] = deltas_por_ano.get(ano, Decimal("0")) + delta
             cursor = payload.get("next")
             if not cursor:
                 break
 
-        if delta_total > 0 and data_mais_recente is not None:
-            res = await atualizar_fiscal_state(
-                conn, sync["user_id"], delta_total, data_mais_recente
-            )
-            await enviar_alertas_telegram(
-                sync["user_id"], res.alertas_criados
-            )
+        delta_total = sum(deltas_por_ano.values(), Decimal("0"))
+        alertas = await atualizar_fiscal_state_por_ano(
+            conn, sync["user_id"], deltas_por_ano
+        )
+        if alertas:
+            await enviar_alertas_telegram(sync["user_id"], alertas)
 
         await conn.execute(
             """

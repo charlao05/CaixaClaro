@@ -1,21 +1,39 @@
-"""Faturamento MEI — M4_CONTRATO §9 (incremento) + §10 (alertas).
+"""Faturamento MEI — M4_CONTRATO §9 (soma) + §10 (alertas).
 
 Decisoes documentadas nesta implementacao:
 
   M4b-D1  TETO_MEI_ANUAL = 81000.00
-  M4b-D2  faturamento_acumulado reinicia por ano (ano_referencia no estado)
+  M4b-D2  o faturamento e por ano-calendario
   M4b-D3  tipo="faturamento_faixa", banda_ou_slug="enq_MEI_NN",
           prazo=31/12 do ano de competencia
 
-Estado JSONB esperado em fiscal_state.estado:
+2026-10-09 — a soma do ano passou a ser DERIVADA dos lancamentos gravados
+(M4_CONTRATO §9: "soma atual das transacoes do usuario em que ..."), em vez
+de um contador ajustado por deltas. O contador se perdia quando chegava um
+lancamento de outro ano: colar um extrato de 2025 depois de ja ter 2026
+trocava o ano do painel e zerava o acumulado, e a soma de uma colagem que
+atravessava a virada ia inteira para o ano mais novo. Agora:
+
+  - `somar_faturamento_do_ano` le a soma de um ano direto de `transactions`
+    (PRINCIPIOS §2: PostgreSQL como fonte de verdade);
+  - `ano_de_referencia` e o ano mais recente com lancamento, sem passar do
+    ano corrente;
+  - cada escrita reavalia SO os anos que tocou, registra os alertas de faixa
+    que faltarem para aquele ano (§10: "insere o alerta se ainda nao existir
+    para aquele prazo") e regrava em `fiscal_state` o retrato do ano de
+    referencia.
+
+Estado JSONB em fiscal_state.estado (retrato da ultima avaliacao):
     {
       "faturamento_acumulado": "45000.00",
       "ano_referencia": 2026,
       "banda_atual": "enq_MEI_60",
       "ultima_avaliacao_em": "2026-09-27T..."
     }
+O painel (services/fiscal_resumo.py) nao le o numero daqui: soma de novo.
 """
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
@@ -78,7 +96,7 @@ FAIXAS: tuple[tuple[Decimal, str, str], ...] = (
 TIPO_ALERTA = "faturamento_faixa"
 
 
-def _calcular_banda(
+def calcular_banda(
     faturamento: Decimal, teto: Decimal | None = TETO_MEI_ANUAL
 ) -> str | None:
     """Retorna o slug da maior faixa atingida, ou None se abaixo de 60%.
@@ -97,15 +115,6 @@ def _calcular_banda(
     return banda
 
 
-def _load_estado(raw) -> dict:
-    """asyncpg devolve JSONB como str por padrao; normaliza para dict."""
-    if raw is None:
-        return {}
-    if isinstance(raw, str):
-        return json.loads(raw)
-    return dict(raw)
-
-
 def conta_faturamento(
     patrimonio: str | None, categoria: str | None, valor=None
 ) -> bool:
@@ -120,6 +129,50 @@ def conta_faturamento(
         patrimonio == "atividade_negocio"
         and categoria in ("receita_servico", "receita_venda")
     )
+
+
+def acumular_por_ano(deltas: dict[int, Decimal], quando: date, valor) -> None:
+    """Soma `valor` ao delta do ano de `quando` (cada lancamento no seu ano)."""
+    deltas[quando.year] = deltas.get(quando.year, Decimal("0")) + Decimal(str(valor))
+
+
+# Espelho em SQL de `conta_faturamento`. Os dois precisam dizer a mesma coisa;
+# tests/test_faturamento_por_ano.py compara um com o outro em todas as
+# combinacoes de patrimonio, categoria e sinal.
+_SQL_SOMA_DO_ANO = """
+    SELECT COALESCE(SUM(valor), 0)
+      FROM transactions
+     WHERE user_id = $1
+       AND data >= $2
+       AND data <= $3
+       AND valor > 0
+       AND patrimonio = 'atividade_negocio'
+       AND categoria IN ('receita_servico', 'receita_venda')
+"""
+
+
+async def somar_faturamento_do_ano(conn, user_id, ano: int) -> Decimal:
+    """Soma, direto dos lancamentos gravados, do que conta no ano (§9)."""
+    soma = await conn.fetchval(
+        _SQL_SOMA_DO_ANO, user_id, date(ano, 1, 1), date(ano, 12, 31)
+    )
+    return Decimal(soma)
+
+
+async def ano_de_referencia(conn, user_id, hoje: date | None = None) -> int:
+    """Ano que o painel mostra: o mais recente com lancamento, sem passar do
+    ano corrente. Sem lancamento nenhum, o ano corrente.
+
+    Data no futuro (erro de digitacao num extrato, por exemplo) nao puxa o
+    painel para um ano que ainda nao comecou.
+    """
+    hoje = hoje or date.today()
+    ultima = await conn.fetchval(
+        "SELECT MAX(data) FROM transactions WHERE user_id = $1 AND data <= $2",
+        user_id,
+        date(hoje.year, 12, 31),
+    )
+    return ultima.year if ultima is not None else hoje.year
 
 
 def faixa_cruzada(
@@ -181,7 +234,7 @@ def calcular_delta(
     faixas = tuple(faixa_cruzada(antes, depois, teto, ano))
     # Recalcula banda_atual SEMPRE — descida tambem precisa refletir.
     # Alertas §10 seguem monotonico-crescentes (so faixa_cruzada emite).
-    estado["banda_atual"] = _calcular_banda(depois, teto)
+    estado["banda_atual"] = calcular_banda(depois, teto)
 
     return estado, FaturamentoResultado(
         antes=antes,
@@ -191,31 +244,48 @@ def calcular_delta(
     )
 
 
+def _retrato(soma: Decimal, ano: int, teto: Decimal | None):
+    """(estado, resultado) de um ano cuja soma e `soma`.
+
+    Usa `calcular_delta` a partir de zero: `faixas` traz TODAS as faixas ja
+    atingidas pela soma, e nao so as cruzadas pela ultima escrita. A tabela
+    `alerts` e unica por (usuario, tipo, faixa, prazo), entao reavaliar nao
+    duplica aviso — e um aviso que tenha faltado e registrado na proxima
+    escrita do mesmo ano.
+    """
+    return calcular_delta(
+        {"faturamento_acumulado": "0", "ano_referencia": ano},
+        soma,
+        date(ano, 12, 31),
+        teto,
+    )
+
+
 async def atualizar_fiscal_state(
     conn, user_id, delta: Decimal, quando: date
 ) -> FaturamentoResultado:
-    """Aplica delta em fiscal_state + emite alertas §10. Lock FOR UPDATE.
+    """Reavalia o faturamento do ano de `quando` e regrava fiscal_state.
+
+    Chamar DEPOIS de gravar os lancamentos, na mesma transacao: a soma e
+    lida do banco, nao acumulada. `delta` e o quanto a escrita mudou a soma
+    daquele ano; com delta zero nada e reavaliado.
 
     Retorna alertas_criados: apenas os que foram efetivamente inseridos
     (ON CONFLICT DO NOTHING suprime duplicatas sem eco).
     """
+    ano = quando.year
+
     if delta == 0:
-        row = await conn.fetchrow(
-            "SELECT estado FROM fiscal_state WHERE user_id = $1", user_id
-        )
-        estado = _load_estado(row["estado"]) if row else {}
+        soma = await somar_faturamento_do_ano(conn, user_id, ano)
         return FaturamentoResultado(
-            antes=Decimal(str(estado.get("faturamento_acumulado", "0"))),
-            depois=Decimal(str(estado.get("faturamento_acumulado", "0"))),
-            ano_referencia=quando.year,
-            faixas=(),
+            antes=soma, depois=soma, ano_referencia=ano, faixas=()
         )
 
-    row = await conn.fetchrow(
-        "SELECT estado FROM fiscal_state WHERE user_id = $1 FOR UPDATE",
-        user_id,
+    # Uma escrita por vez para cada usuario: quem chega depois so soma
+    # quando a anterior ja confirmou, e por isso enxerga os lancamentos dela.
+    await conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtext($1))", f"fiscal_state:{user_id}"
     )
-    estado_atual = _load_estado(row["estado"]) if row else {}
 
     # O limite depende de quem e o usuario: so MEI tem teto, e no ano de
     # abertura ele e proporcional. Quem nao e MEI nao recebe alerta de faixa.
@@ -224,18 +294,26 @@ async def atualizar_fiscal_state(
         "FROM users WHERE id = $1",
         user_id,
     )
-    teto = (
-        teto_do_ano(
+
+    def teto_de(ano_alvo: int) -> Decimal | None:
+        if perfil is None:
+            return TETO_MEI_ANUAL
+        return teto_do_ano(
             perfil["regime"],
             perfil["mes_abertura_mei"],
             perfil["ano_abertura_mei"],
-            quando.year,
+            ano_alvo,
         )
-        if perfil is not None
-        else TETO_MEI_ANUAL
-    )
 
-    novo_estado, resultado = calcular_delta(estado_atual, delta, quando, teto)
+    soma = await somar_faturamento_do_ano(conn, user_id, ano)
+    estado_do_ano, resultado = _retrato(soma, ano, teto_de(ano))
+
+    ano_ref = await ano_de_referencia(conn, user_id)
+    if ano_ref == ano:
+        estado = estado_do_ano
+    else:
+        soma_ref = await somar_faturamento_do_ano(conn, user_id, ano_ref)
+        estado, _ = _retrato(soma_ref, ano_ref, teto_de(ano_ref))
 
     await conn.execute(
         """
@@ -246,7 +324,7 @@ async def atualizar_fiscal_state(
               atualizado_em = now()
         """,
         user_id,
-        json.dumps(novo_estado),
+        json.dumps(estado),
     )
 
     prazo = prazo_do_ano(quando)
@@ -266,4 +344,30 @@ async def atualizar_fiscal_state(
         if row is not None:
             alertas_criados.append((slug, sev, msg))
 
-    return replace(resultado, alertas_criados=tuple(alertas_criados))
+    return FaturamentoResultado(
+        antes=soma - delta,
+        depois=soma,
+        ano_referencia=ano,
+        faixas=resultado.faixas,
+        alertas_criados=tuple(alertas_criados),
+    )
+
+
+async def atualizar_fiscal_state_por_ano(
+    conn, user_id, deltas_por_ano: Mapping[int, Decimal]
+) -> tuple[tuple[str, str, str], ...]:
+    """Reavalia cada ano que a escrita tocou, do mais antigo ao mais novo.
+
+    Um extrato pode atravessar a virada do ano; cada lancamento entra na
+    soma do ano da PROPRIA data. Retorna os alertas criados em todos os anos.
+    """
+    alertas: list[tuple[str, str, str]] = []
+    for ano in sorted(deltas_por_ano):
+        delta = deltas_por_ano[ano]
+        if delta == 0:
+            continue
+        resultado = await atualizar_fiscal_state(
+            conn, user_id, delta, date(ano, 12, 31)
+        )
+        alertas.extend(resultado.alertas_criados)
+    return tuple(alertas)

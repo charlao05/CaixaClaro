@@ -25,7 +25,9 @@ from ..domain.fiscal.classificacao import (
 from ..domain.fiscal.guardrails import aplicar_guardrail
 from ..domain.fiscal.triagem import triar
 from ..services.faturamento import (
+    acumular_por_ano,
     atualizar_fiscal_state,
+    atualizar_fiscal_state_por_ano,
     conta_faturamento,
 )
 from ..services.notificacoes import enviar_alertas_telegram
@@ -98,8 +100,9 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
     paste_id = calcular_paste_id(texto)
     uid = _uuid.UUID(user_id)
     importados = 0
-    delta_faturamento = Decimal("0")
-    data_mais_recente: date | None = None
+    # Cada lançamento entra na soma do ano da própria data: um extrato pode
+    # atravessar a virada do ano.
+    deltas_por_ano: dict[int, Decimal] = {}
     ctx = ContextoClassificacao(
         personal_rules={},
         regime=regime,
@@ -137,15 +140,11 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
         if inserted is not None:
             importados += 1
             if conta_faturamento(c.patrimonio, cat, l.valor):
-                delta_faturamento += Decimal(str(l.valor))
-                if data_mais_recente is None or l.data > data_mais_recente:
-                    data_mais_recente = l.data
+                acumular_por_ano(deltas_por_ano, l.data, l.valor)
 
-    if delta_faturamento > 0 and data_mais_recente is not None:
-        res = await atualizar_fiscal_state(
-            conn, uid, delta_faturamento, data_mais_recente
-        )
-        alertas_out.extend(res.alertas_criados)
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
 
     rows = await conn.fetch(
         """
@@ -222,8 +221,9 @@ async def _operacao_importar(
     import_id = str(_uuid.uuid4())
     uid = _uuid.UUID(user_id)
     importados = 0
-    delta_faturamento = Decimal("0")
-    data_mais_recente: date | None = None
+    # Cada lançamento entra na soma do ano da própria data: um extrato pode
+    # atravessar a virada do ano.
+    deltas_por_ano: dict[int, Decimal] = {}
     ctx = ContextoClassificacao(
         personal_rules={},
         regime=regime,
@@ -263,15 +263,11 @@ async def _operacao_importar(
             importados += 1
 
             if conta_faturamento(c.patrimonio, cat, l.valor):
-                delta_faturamento += Decimal(str(l.valor))
-                if data_mais_recente is None or l.data > data_mais_recente:
-                    data_mais_recente = l.data
+                acumular_por_ano(deltas_por_ano, l.data, l.valor)
 
-    if delta_faturamento > 0 and data_mais_recente is not None:
-        res = await atualizar_fiscal_state(
-            conn, uid, delta_faturamento, data_mais_recente
-        )
-        alertas_out.extend(res.alertas_criados)
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
 
     rows = await conn.fetch(
         """
@@ -574,16 +570,17 @@ async def _operacao_confirmar(
         iguais = await aplicar_a_iguais(conn, uid, resultado, user_id)
         regra_criada = await lembrar_regra(conn, uid, resultado)
 
-    # Retroatividade (M4_CONTRATO §9): cada decisão ajusta o acumulado pelo
-    # seu delta, na data do próprio lançamento.
+    # Retroatividade (M4_CONTRATO §9): cada decisão muda a soma do ano do
+    # próprio lançamento. A soma é relida do banco, um ano de cada vez.
+    deltas_por_ano: dict[int, Decimal] = {}
     delta_total = Decimal("0")
     for r in [resultado, *iguais]:
         if r.delta_faturamento != 0:
-            res = await atualizar_fiscal_state(
-                conn, uid, r.delta_faturamento, r.data
-            )
-            alertas_out.extend(res.alertas_criados)
+            acumular_por_ano(deltas_por_ano, r.data, r.delta_faturamento)
             delta_total += r.delta_faturamento
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
 
     await registrar_auditoria(
         conn,
