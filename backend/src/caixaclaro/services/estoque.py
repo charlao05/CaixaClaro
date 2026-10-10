@@ -22,6 +22,9 @@ from ..domain.negocio.taxonomia_movimento import tipo_movimento_valido
 from ..security.audit import registrar_auditoria
 from ..security.erros import erro
 
+# Mesmos valores do CHECK de stock_movements.origem (migration 011).
+ORIGENS_VALIDAS = ("manual", "importado")
+
 
 def _serializar(r: asyncpg.Record) -> dict[str, Any]:
     return {
@@ -76,9 +79,35 @@ async def registrar_movimento(
         )
     if quantidade <= 0:
         raise erro(422, "VALIDATION_ERROR", "Quantidade deve ser maior que zero.")
+    # Entradas malformadas devolviam 500 (revisão de 2026-10-09, item 35 do
+    # relatório de estado): id de produto inválido, origem fora da lista do
+    # banco e referência que não é UUID ou não existe.
+    if origem not in ORIGENS_VALIDAS:
+        raise erro(422, "VALIDATION_ERROR", f"Origem desconhecida: {origem}.")
 
     uid = _uuid.UUID(str(user_id))
-    pid = _uuid.UUID(product_id)
+    try:
+        pid = _uuid.UUID(product_id)
+    except ValueError as e:
+        raise erro(404, "PRODUTO_NAO_ENCONTRADO", "Produto não encontrado.") from e
+
+    ref_uuid = None
+    if referencia_transacao_id:
+        try:
+            ref_uuid = _uuid.UUID(referencia_transacao_id)
+        except ValueError as e:
+            raise erro(
+                422, "VALIDATION_ERROR", "Lançamento de referência inválido."
+            ) from e
+        # Só um lançamento do próprio usuário pode ser referência.
+        existe = await conn.fetchval(
+            "SELECT 1 FROM transactions WHERE id = $1 AND user_id = $2",
+            ref_uuid, uid,
+        )
+        if existe is None:
+            raise erro(
+                422, "VALIDATION_ERROR", "Lançamento de referência não encontrado."
+            )
 
     produto = await conn.fetchrow(
         "SELECT id FROM products WHERE user_id=$1 AND id=$2 FOR UPDATE", uid, pid,
@@ -98,7 +127,6 @@ async def registrar_movimento(
             },
         ) from e
 
-    ref_uuid = _uuid.UUID(referencia_transacao_id) if referencia_transacao_id else None
     row = await conn.fetchrow(
         """
         INSERT INTO stock_movements

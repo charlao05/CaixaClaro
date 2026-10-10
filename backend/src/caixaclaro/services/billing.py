@@ -77,6 +77,44 @@ async def _resolver_customer(conn, user_id: UUID) -> str:
     return customer_id
 
 
+async def _expirar_pendentes_vencidos(conn, user_id, plano) -> None:
+    """Marca como 'expirado' o pendente do plano que passou do prazo local.
+
+    Um pendente com `expira_em` no passado não é reusado pelo checkout, mas,
+    enquanto continua 'pendente', o índice único payments_pendente_uq
+    (user_id, plano) barra a cobrança nova: quem gerava um PIX e voltava no
+    dia seguinte recebia erro 500, com PIX ou com cartão.
+
+    É a mesma regra que o worker de renovação já aplica (CONTRATOS_INTERNOS
+    §12, item 3: "pendente com expira_em no passado → nova cobrança
+    permitida"). A cobrança antiga não é cancelada no Asaas: se ainda for
+    paga, o webhook confirma e concede o período do mesmo jeito (matriz de
+    PAYMENT_CONFIRMED, estado 'expirado').
+    """
+    vencidos = await conn.fetch(
+        """
+        UPDATE payments
+           SET status = 'expirado',
+               atualizado_em = now()
+         WHERE user_id = $1 AND plano = $2
+           AND status = 'pendente'
+           AND expira_em <= now()
+        RETURNING id
+        """,
+        user_id,
+        plano,
+    )
+    for r in vencidos:
+        await registrar_auditoria(
+            conn,
+            ator="usuario",
+            acao="PAGAMENTO_PENDENTE_EXPIRADO",
+            user_id=str(user_id),
+            alvo=str(r["id"]),
+            meta={"plano": plano, "motivo": "prazo_local_vencido"},
+        )
+
+
 async def _obter_ou_criar_payment(
     conn, user_id, plano, valor, periodo_dias, metodo
 ):
@@ -101,6 +139,8 @@ async def _obter_ou_criar_payment(
     )
     if row is not None:
         return dict(row)
+
+    await _expirar_pendentes_vencidos(conn, user_id, plano)
 
     novo = await conn.fetchrow(
         """

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { register } from '../services/auth'
+import { register, type Regime } from '../services/auth'
 import { salvarSessao, type Sessao } from '../services/session'
 import { ApiError } from '../services/api'
 import { apenasDigitos, formatarCPF, validarCPF } from '../utils/cpf'
@@ -30,6 +30,41 @@ function IconeOlho({ aberto }: { aberto: boolean }) {
   )
 }
 
+// O CaixaClaro serve quem é MEI, quem trabalha no CPF, quem tem empresa
+// pequena e quem ainda está começando. Ninguém é tratado como MEI por omissão.
+const PERFIS: { id: string; regime: Regime; label: string; ajuda: string }[] = [
+  {
+    id: 'mei',
+    regime: 'MEI',
+    label: 'Sou MEI',
+    ajuda: 'Tenho CNPJ de microempreendedor individual.',
+  },
+  {
+    id: 'autonomo',
+    regime: 'PF',
+    label: 'Trabalho por conta própria, sem CNPJ',
+    ajuda: 'Faço serviços, bicos ou vendas no meu CPF.',
+  },
+  {
+    id: 'simples',
+    regime: 'SIMPLES',
+    label: 'Tenho empresa no Simples Nacional',
+    ajuda: 'Microempresa ou empresa de pequeno porte.',
+  },
+  {
+    id: 'assalariado',
+    regime: 'PF',
+    label: 'Tenho emprego ou aposentadoria',
+    ajuda: 'Quero entender meu dinheiro, com ou sem renda extra.',
+  },
+  {
+    id: 'comecando',
+    regime: 'PF',
+    label: 'Estou começando e ainda não sei',
+    ajuda: 'Tudo bem. Você começa como pessoa física e muda depois, no Perfil.',
+  },
+]
+
 export default function Register({ onRegistrar, onIrParaLogin }: Props) {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -37,6 +72,7 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [mostrarSenha2, setMostrarSenha2] = useState(false)
   const [cpf, setCpf] = useState('')
+  const [perfil, setPerfil] = useState('')
   const [cpfErro, setCpfErro] = useState<string | null>(null)
   const [senha2Erro, setSenha2Erro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(false)
@@ -65,6 +101,12 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
     e.preventDefault()
     setErro(null)
 
+    const escolhido = PERFIS.find((p) => p.id === perfil)
+    if (!escolhido) {
+      setErro('Escolha a opção que mais parece com você.')
+      return
+    }
+
     if (!validarCPF(cpf)) {
       setCpfErro('CPF inválido — verifique os dígitos.')
       return
@@ -77,7 +119,7 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
 
     setCarregando(true)
     try {
-      const r = await register(email, senha, cpf)
+      const r = await register(email, senha, cpf, escolhido.regime)
       const sessao: Sessao = {
         token: r.token,
         expiresAt: r.expires_at,
@@ -104,7 +146,29 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
     <main>
       <h1>CaixaClaro</h1>
       <h2>Criar conta</h2>
+      <p className="assinatura-nota">
+        Você tem 7 dias para experimentar, sem informar cartão.
+      </p>
       <form onSubmit={handleSubmit}>
+        <fieldset className="cadastro-perfis">
+          <legend>Como você trabalha hoje?</legend>
+          {PERFIS.map((p) => (
+            <label key={p.id} className="cadastro-perfil">
+              <input
+                type="radio"
+                name="perfil"
+                value={p.id}
+                checked={perfil === p.id}
+                onChange={() => setPerfil(p.id)}
+                disabled={carregando}
+              />
+              <span>
+                <strong>{p.label}</strong>
+                <small>{p.ajuda}</small>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <label>
           E-mail
           <input
@@ -182,6 +246,10 @@ export default function Register({ onRegistrar, onIrParaLogin }: Props) {
             aria-invalid={cpfErro !== null}
           />
         </label>
+        <p className="assinatura-nota">
+          O CPF identifica a sua conta e é usado para gerar a cobrança da
+          assinatura. Ele fica guardado cifrado.
+        </p>
         {senha2Erro && <p role="alert">{senha2Erro}</p>}
         {cpfErro && <p role="alert">{cpfErro}</p>}
         {erro && <p role="alert">{erro}</p>}

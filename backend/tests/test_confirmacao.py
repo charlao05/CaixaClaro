@@ -102,16 +102,21 @@ async def test_confirmar_promove_para_receita_incrementa_faturamento(client):
     # Sanidade: caiu em "outros"
     assert itens[0]["categoria"] == "outros"
 
-    # Nao posso promover para receita_servico porque patrimonio=indeterminado
-    # no estado inicial. O delta sera 0 mas o teste prova o mecanismo.
-    # Melhor: usar transacao que ja nasceu receita.
-    # Alternativa: confirmar direto sem categoria mudando -> ja testado acima.
-    # Aqui verificamos que confirmar com categoria valida NAO quebra.
+    # M4_CONTRATO §9: "outra categoria -> receita PJ: ADICIONA o valor".
+    # Ate 2026-10-09 este teste so verificava a troca de categoria; o delta
+    # voltava 0 porque `patrimonio` ficava preso ao palpite original.
     r = await _confirmar(client, token, tx_id, categoria="receita_servico")
     assert r.status_code == 200, r.json()
     body = r.json()
     assert body["categoria_nova"] == "receita_servico"
     assert body["categoria_mudou"] is True
+    assert Decimal(body["delta_faturamento"]) == Decimal("100.00")
+
+    async with conexao() as conn:
+        acumulado = await conn.fetchval(
+            "SELECT estado->>'faturamento_acumulado' FROM fiscal_state"
+        )
+    assert Decimal(acumulado) == Decimal("100.00")
 
 
 # ============================================================

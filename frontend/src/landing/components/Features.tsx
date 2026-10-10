@@ -53,7 +53,7 @@ const FEATURES: Feature[] = [
   {
     name: 'Alertas',
     title: 'Não dependa apenas da memória.',
-    text: 'Receba avisos sobre movimentações que merecem sua atenção.',
+    text: 'O CaixaClaro mostra o que precisa da sua resposta e, se você é MEI, avisa quando o faturamento do ano se aproxima do limite.',
     icon: Bell,
   },
   {

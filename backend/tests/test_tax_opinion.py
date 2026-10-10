@@ -35,9 +35,25 @@ def test_opiniao_tem_todos_os_nove_campos():
         assert hasattr(o, campo), f"faltando: {campo}"
 
 
-def test_grau_fato_confirmado_para_confianca_alta():
+def test_palpite_de_confianca_alta_nao_e_fato_confirmado():
+    """2026-10-09 (D2): classificação automática ≠ confirmação
+    (M4_CONTRATO §16). Sem o usuário confirmar, o teto é leitura_provavel."""
     o = _gerar("PAGTO GUIA DAS SIMPLES")
+    assert o.grau_certeza_leitura == "leitura_provavel"
+
+
+def test_fato_confirmado_exige_confirmacao_do_usuario():
+    desc = "PAGTO GUIA DAS SIMPLES"
+    ctx = ContextoClassificacao(personal_rules={})
+    classif = classificar_v2(desc, Decimal("100.00"), ctx)
+    guard = aplicar_guardrail(classif, descricao=desc)
+    tri = triar(classif, guard)
+    o = generate_tax_opinion(
+        descricao=desc, valor=Decimal("100.00"),
+        classif=classif, guard=guard, tri=tri, confirmada=True,
+    )
     assert o.grau_certeza_leitura == "fato_confirmado"
+    assert "Você informou" in o.fato
 
 
 def test_grau_duvida_para_generico():
@@ -84,7 +100,53 @@ def test_salario_nao_compoe_faturamento():
 
 def test_emprestimo_tem_tratamento_sem_efeito():
     o = _gerar("CREDITO EMPRESTIMO CONSIGNADO BCO", "12000.00")
-    assert "imediato" in o.possivel_tratamento_tributario.lower()
+    assert "por si só, não é renda" in o.possivel_tratamento_tributario.lower()
+
+
+def _gerar_confirmada(categoria, proposito, regime):
+    classif = ClassificacaoResultado(
+        categoria=categoria, proposito=proposito,
+        origem_sugerida="desconhecido", patrimonio="atividade_negocio",
+        tratamento_tributario="indeterminado_pendente", confianca=0.98,
+        needs_review=False, via="usuario", motivo=None,
+    )
+    guard = GuardrailResultado(
+        aplicado=False, categoria_original=categoria,
+        categoria_corrigida=categoria, motivo="", regra_acionada=None,
+    )
+    tri = TriagemResultado(disposicao="silencioso", needs_review=False)
+    return generate_tax_opinion(
+        descricao="PIX RECEBIDO COMPRADOR", valor=Decimal("900.00"),
+        classif=classif, guard=guard, tri=tri, regime=regime, confirmada=True,
+    )
+
+
+def test_venda_de_pessoa_fisica_declara_o_que_o_produto_nao_sabe():
+    """Revisão do M13 (achado R4): para pessoa física, "venda" pode ser a
+    atividade da pessoa ou a venda de um bem que era dela. O CaixaClaro não
+    tem esse dado e não pode afirmar "renda do seu trabalho"."""
+    o = _gerar_confirmada("receita_venda", "venda_produto", "PF")
+    assert "renda do seu trabalho" not in o.interpretacao
+    assert "não sabe qual é o seu caso" in o.interpretacao
+    assert o.relacao_pf_pj.startswith("Depende")
+    assert "não conclui" in o.possivel_tratamento_tributario
+    assert "carnê-leão" not in o.possivel_tratamento_tributario
+    for texto in (o.interpretacao, o.relacao_pf_pj, o.possivel_tratamento_tributario):
+        assert "MEI" not in texto
+
+
+def test_servico_de_pessoa_fisica_continua_sendo_renda_do_trabalho():
+    o = _gerar_confirmada("receita_servico", "trabalho_servico", "PF")
+    assert "renda do seu trabalho por conta própria" in o.interpretacao
+    assert o.relacao_pf_pj == "Do trabalho."
+
+
+def test_venda_de_mei_e_de_simples_nao_muda():
+    mei = _gerar_confirmada("receita_venda", "venda_produto", "MEI")
+    assert mei.interpretacao == "Entra na soma do seu faturamento como MEI neste ano."
+    assert mei.relacao_pf_pj == "Do trabalho."
+    simples = _gerar_confirmada("receita_venda", "venda_produto", "SIMPLES")
+    assert simples.interpretacao == "Entra na soma das receitas do seu negócio."
 
 
 # ============================================================
@@ -217,7 +279,7 @@ async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
     assert r.status_code == 200, r.json()
     body = r.json()
     # A narrativa de fato cita "serviço prestado"
-    assert "serviço prestado" in body["fato"].lower()
+    assert "trabalho ou serviço" in body["fato"].lower()
     # Nao caiu em duvida (usuario confirmou, mas confianca/via
     # persistidos podem variar — apenas verifica que NAO e "outros")
     assert "sem classificacao clara" not in body["fato"].lower()
@@ -247,5 +309,5 @@ async def test_opiniao_pos_confirma_sem_idempotency(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert "serviço prestado" in body["fato"].lower()
+    assert "trabalho ou serviço" in body["fato"].lower()
 

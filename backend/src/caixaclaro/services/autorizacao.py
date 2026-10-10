@@ -63,23 +63,44 @@ class Decisao:
     motivo: Motivo | None = None
 
 
-def avaliar(ctx: ContextoAutorizacao) -> Decisao:
-    """Decide acesso. Retorna Decisao com motivo quando bloqueado."""
+Situacao = Literal[
+    "isento", "teste", "assinatura", "trial_expirado", "assinatura_expirada"
+]
+
+
+def fim_do_teste(criado_em: datetime) -> datetime:
+    """Instante em que o periodo de teste acaba."""
+    return criado_em + timedelta(days=settings().trial_dias)
+
+
+def situacao(ctx: ContextoAutorizacao) -> Situacao:
+    """De onde vem o acesso (ou por que ele acabou). Unica copia da formula.
+
+    Os tres primeiros valores sao acesso permitido; os dois ultimos sao os
+    motivos de bloqueio do E2.
+    """
     agora = ctx.agora if ctx.agora is not None else datetime.now(timezone.utc)
 
     if ctx.trial_exempt:
-        return Decisao(permitido=True, motivo=None)
+        return "isento"
 
-    trial_fim = ctx.criado_em + timedelta(days=settings().trial_dias)
-    if trial_fim > agora:
-        return Decisao(permitido=True, motivo=None)
+    if fim_do_teste(ctx.criado_em) > agora:
+        return "teste"
 
     if ctx.periodo_fim is not None and ctx.periodo_fim > agora:
-        return Decisao(permitido=True, motivo=None)
+        return "assinatura"
 
     if ctx.periodo_fim is not None:
-        return Decisao(permitido=False, motivo="assinatura_expirada")
-    return Decisao(permitido=False, motivo="trial_expirado")
+        return "assinatura_expirada"
+    return "trial_expirado"
+
+
+def avaliar(ctx: ContextoAutorizacao) -> Decisao:
+    """Decide acesso. Retorna Decisao com motivo quando bloqueado."""
+    s = situacao(ctx)
+    if s in ("trial_expirado", "assinatura_expirada"):
+        return Decisao(permitido=False, motivo=s)
+    return Decisao(permitido=True, motivo=None)
 
 
 def decidir(ctx: ContextoAutorizacao) -> bool:

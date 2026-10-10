@@ -49,7 +49,7 @@ async def test_e2e_aporte_capital_persiste_e_override_parecer(client):
     )
     assert r.status_code == 200, r.json()
     body = r.json()
-    assert "aporte de capital" in body["fato"].lower()
+    assert "colocado no negócio" in body["fato"].lower()
     assert "capital social" in (
         body["interpretacao"] + body["possivel_tratamento_tributario"]
     ).lower()

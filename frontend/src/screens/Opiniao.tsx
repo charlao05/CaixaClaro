@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from '../services/api'
 import type { Sessao } from '../services/session'
+import { corrigir, type OpcaoResposta } from '../services/fila'
+import { apagarTransacao } from '../services/transacoes'
 import {
   getOpiniao,
   type GrauCerteza,
@@ -14,9 +16,9 @@ type Props = {
 }
 
 const LABEL_GRAU: Record<GrauCerteza, string> = {
-  fato_confirmado: 'Fato confirmado',
-  leitura_provavel: 'Leitura provável',
-  duvida_declarada: 'Requer confirmação',
+  fato_confirmado: 'Confirmado por você',
+  leitura_provavel: 'Leitura do CaixaClaro — você não confirmou',
+  duvida_declarada: 'Falta a sua resposta',
 }
 
 function classeGrau(g: GrauCerteza): string {
@@ -25,13 +27,25 @@ function classeGrau(g: GrauCerteza): string {
   return 'opiniao-badge ambar'
 }
 
+function formatBRL(s: string): string {
+  const n = Math.abs(parseFloat(s))
+  if (!isFinite(n)) return s
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function formatData(iso: string): string {
+  const partes = iso.slice(0, 10).split('-')
+  if (partes.length !== 3) return iso
+  return `${partes[2]}/${partes[1]}/${partes[0]}`
+}
+
 function msgErro(e: unknown): string {
   if (e instanceof ApiError) {
     return e.retryAfter
       ? `${e.message} Tente novamente em ${e.retryAfter}s.`
       : e.message
   }
-  return 'Erro inesperado.'
+  return 'Algo deu errado. Tente de novo em instantes.'
 }
 
 function Estagio({ titulo, texto }: { titulo: string; texto: string }) {
@@ -46,6 +60,10 @@ function Estagio({ titulo, texto }: { titulo: string; texto: string }) {
 export default function Opiniao({ sessao, txId, onVoltar }: Props) {
   const [opiniao, setOpiniao] = useState<DadosOpiniao | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [escolhendo, setEscolhendo] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [apagando, setApagando] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -65,6 +83,40 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
     }
   }, [sessao.token, txId])
 
+  async function handleEscolher(o: OpcaoResposta) {
+    setSalvando(true)
+    setErro(null)
+    try {
+      const r = await corrigir(sessao.token, txId, {
+        categoria: o.categoria,
+        proposito: o.proposito,
+      })
+      setAviso(r.mensagem)
+      setEscolhendo(false)
+      setOpiniao(await getOpiniao(sessao.token, txId))
+    } catch (e) {
+      setErro(msgErro(e))
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function handleApagar() {
+    const ok = window.confirm(
+      'Apagar este lançamento? Ele sai da lista e das somas. Não dá para desfazer.',
+    )
+    if (!ok) return
+    setApagando(true)
+    setErro(null)
+    try {
+      await apagarTransacao(sessao.token, txId)
+      onVoltar()
+    } catch (e) {
+      setErro(msgErro(e))
+      setApagando(false)
+    }
+  }
+
   const cabecalho = (
     <header>
       <h1>CaixaClaro</h1>
@@ -77,7 +129,7 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
     </header>
   )
 
-  if (erro) {
+  if (erro && !opiniao) {
     return (
       <main className="dashboard">
         {cabecalho}
@@ -96,6 +148,8 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
   }
 
   const g = opiniao.grau_certeza_leitura
+  const faltaResposta = g === 'duvida_declarada'
+  const mostrarOpcoes = escolhendo || faltaResposta
 
   return (
     <main className="dashboard">
@@ -103,44 +157,95 @@ export default function Opiniao({ sessao, txId, onVoltar }: Props) {
 
       <section>
         <div className="opiniao-topo">
-          <h2>Parecer fiscal</h2>
+          <h2>Entenda este lançamento</h2>
           <span className={classeGrau(g)}>{LABEL_GRAU[g]}</span>
         </div>
 
+        <p className="revisao-descricao">
+          {formatData(opiniao.data)} · <strong>{formatBRL(opiniao.valor)}</strong> ·{' '}
+          {opiniao.descricao}
+        </p>
+        <p>
+          <strong>{opiniao.rotulo}</strong>
+        </p>
+
+        {aviso && (
+          <p role="status" className="revisao-feedback">
+            {aviso}
+          </p>
+        )}
+        {erro && <p role="alert">{erro}</p>}
+
         <div className="opiniao-card">
-          <Estagio titulo="1. Fato observado" texto={opiniao.fato} />
-          <Estagio titulo="2. Interpretação" texto={opiniao.interpretacao} />
-          <Estagio titulo="3. Relação PF / PJ" texto={opiniao.relacao_pf_pj} />
+          <Estagio titulo="O que aconteceu" texto={opiniao.fato} />
+          <Estagio titulo="O que isso significa" texto={opiniao.interpretacao} />
           <Estagio
-            titulo="4. Possível tratamento tributário"
+            titulo="É da vida pessoal ou do trabalho?"
+            texto={opiniao.relacao_pf_pj}
+          />
+          <Estagio
+            titulo="Tem a ver com imposto?"
             texto={opiniao.possivel_tratamento_tributario}
           />
+          <Estagio titulo="Isso vale se…" texto={opiniao.condicoes_necessarias} />
           <Estagio
-            titulo="5. Condições necessárias"
-            texto={opiniao.condicoes_necessarias}
-          />
-          <Estagio
-            titulo="6. O que não sabemos"
+            titulo="O que o CaixaClaro não sabe"
             texto={opiniao.pendencias}
           />
-          <Estagio titulo="7. Próximo passo" texto={opiniao.proximo_passo} />
-
-          {opiniao.opcoes_esclarecimento.length > 0 && (
-            <div className="opiniao-opcoes">
-              <span className="opiniao-estagio-titulo">
-                Opções de esclarecimento
-              </span>
-              <ul>
-                {opiniao.opcoes_esclarecimento.map((o, i) => (
-                  <li key={i}>
-                    <strong>{o.label}</strong>
-                    <span className="opiniao-opcao-desc">{o.descricao}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <Estagio
+            titulo="O que dá para fazer agora"
+            texto={opiniao.proximo_passo}
+          />
         </div>
+
+        {mostrarOpcoes ? (
+          <div className="revisao-card">
+            <p className="revisao-pergunta">
+              <strong>
+                {faltaResposta ? 'O que foi este lançamento?' : 'O que foi, de verdade?'}
+              </strong>
+            </p>
+            <div className="revisao-opcoes">
+              {opiniao.opcoes_correcao.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => handleEscolher(o)}
+                  disabled={salvando}
+                >
+                  <span className="revisao-opcao-label">{o.label}</span>
+                  <span className="revisao-opcao-desc">{o.descricao}</span>
+                </button>
+              ))}
+            </div>
+            {!faltaResposta && (
+              <button
+                type="button"
+                onClick={() => setEscolhendo(false)}
+                disabled={salvando}
+              >
+                Deixar como está
+              </button>
+            )}
+          </div>
+        ) : (
+          <button type="button" onClick={() => setEscolhendo(true)}>
+            Não foi isso? Corrigir
+          </button>
+        )}
+
+        <p className="assinatura-nota">
+          Esta explicação ajuda você a se organizar e a conversar com um
+          contador. Não é apuração de imposto nem substitui um profissional.
+        </p>
+
+        {opiniao.origem && opiniao.origem !== 'pluggy' && (
+          <div className="assinatura-acoes">
+            <button type="button" onClick={handleApagar} disabled={apagando || salvando}>
+              {apagando ? 'Apagando...' : 'Apagar este lançamento'}
+            </button>
+          </div>
+        )}
       </section>
     </main>
   )

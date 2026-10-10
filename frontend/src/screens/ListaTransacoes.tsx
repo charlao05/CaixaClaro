@@ -129,10 +129,11 @@ export default function ListaTransacoes({
                     <span className="tx-desc">{t.descricao_bruta}</span>
                     <span className="tx-valor">{formatBRL(t.valor)}</span>
                     <span className="tx-cat">
-                      {t.categoria ?? '—'}
+                      {t.rotulo}
                       {t.needs_review && (
-                        <span className="tx-pend"> pendente</span>
+                        <span className="tx-pend"> · falta a sua resposta</span>
                       )}
+                      {t.confirmada && <span> · confirmado por você</span>}
                     </span>
                   </button>
                 </li>

@@ -7,6 +7,7 @@ import {
   type Sessao,
 } from './services/session'
 import { logout as apiLogout, type Regime } from './services/auth'
+import { definirAoSessaoEncerrada } from './services/api'
 import Login from './screens/Login'
 import Register from './screens/Register'
 import EsqueciSenha from './screens/EsqueciSenha'
@@ -93,6 +94,28 @@ export default function App() {
     sessionStorage.setItem(VIEW_AUTH_KEY, viewAuth)
   }, [viewAuth])
 
+  // Sessão expirada ou encerrada no servidor: volta ao login com uma frase
+  // clara, em vez de deixar cada tela mostrando o erro cru.
+  const [avisoLogin, setAvisoLogin] = useState<string | null>(null)
+  useEffect(() => {
+    definirAoSessaoEncerrada(() => {
+      limparSessao()
+      sessionStorage.removeItem(VIEW_AUTH_KEY)
+      sessionStorage.removeItem(SELECTED_TX_KEY)
+      setSessao(null)
+      setViewAuth('dashboard')
+      setSelectedTxId(null)
+      setView('login')
+      setAvisoLogin('Sua sessão terminou. Entre de novo para continuar.')
+    })
+    return () => definirAoSessaoEncerrada(null)
+  }, [])
+
+  function handleEntrou(s: Sessao) {
+    setAvisoLogin(null)
+    setSessao(s)
+  }
+
   useEffect(() => {
     if (selectedTxId === null) {
       sessionStorage.removeItem(SELECTED_TX_KEY)
@@ -166,7 +189,8 @@ export default function App() {
     }
     return (
       <Login
-        onLogin={setSessao}
+        aviso={avisoLogin}
+        onLogin={handleEntrou}
         onIrParaRegister={() => setView('register')}
         onIrParaEsqueciSenha={() => setView('esqueci-senha')}
       />
@@ -241,7 +265,11 @@ export default function App() {
 
   if (viewAuth === 'assinatura') {
     return (
-      <Assinatura sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
+      <Assinatura
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+        onLogout={handleLogout}
+      />
     )
   }
 

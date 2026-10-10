@@ -7,7 +7,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from caixaclaro.config import settings
-from caixaclaro.services.autorizacao import ContextoAutorizacao, avaliar, decidir
+from caixaclaro.services.autorizacao import (
+    ContextoAutorizacao,
+    avaliar,
+    decidir,
+    fim_do_teste,
+    situacao,
+)
 
 
 AGORA = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
@@ -183,3 +189,38 @@ def test_avaliar_determinismo():
     d1 = avaliar(ctx)
     d2 = avaliar(ctx)
     assert d1 == d2
+
+
+# ---- situacao(): de onde vem o acesso (revisão de 2026-10-09, achado R8) ----
+
+def test_situacao_cobre_os_cinco_casos():
+    futuro = AGORA + timedelta(days=10)
+    passado = AGORA - timedelta(days=1)
+    assert situacao(_ctx(trial_exempt=True, dias_desde_criacao=365)) == "isento"
+    assert situacao(_ctx(dias_desde_criacao=1)) == "teste"
+    assert situacao(_ctx(dias_desde_criacao=40, periodo_fim=futuro)) == "assinatura"
+    assert situacao(_ctx(dias_desde_criacao=40, periodo_fim=passado)) == "assinatura_expirada"
+    assert situacao(_ctx(dias_desde_criacao=40)) == "trial_expirado"
+
+
+def test_situacao_e_avaliar_nunca_discordam():
+    futuro = AGORA + timedelta(days=10)
+    passado = AGORA - timedelta(days=1)
+    for ctx in (
+        _ctx(trial_exempt=True, dias_desde_criacao=365),
+        _ctx(dias_desde_criacao=0),
+        _ctx(dias_desde_criacao=1, periodo_fim=passado),
+        _ctx(dias_desde_criacao=40, periodo_fim=futuro),
+        _ctx(dias_desde_criacao=40, periodo_fim=passado),
+        _ctx(dias_desde_criacao=40, periodo_fim=AGORA),
+        _ctx(dias_desde_criacao=40),
+    ):
+        decisao = avaliar(ctx)
+        s = situacao(ctx)
+        assert decisao.permitido == (s in ("isento", "teste", "assinatura"))
+        assert decisao.motivo == (None if decisao.permitido else s)
+
+
+def test_fim_do_teste_soma_os_dias_configurados():
+    criado = AGORA - timedelta(days=3)
+    assert fim_do_teste(criado) == criado + timedelta(days=settings().trial_dias)

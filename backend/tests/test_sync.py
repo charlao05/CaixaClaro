@@ -505,3 +505,61 @@ async def test_worker_idempotente_nao_duplica_transactions(client, monkeypatch):
 
     # Continua 2 — idempotencia por (user_id, pluggy_tx_id)
     assert quantidade_2 == 2
+
+
+async def test_worker_sync_que_atravessa_a_virada_soma_cada_ano(client, monkeypatch):
+    """Open Finance entrega meses de histórico de uma vez. Cada lançamento
+    entra na soma do ano da própria data (revisão de 2026-10-09, achado R5)."""
+    from datetime import date
+    from decimal import Decimal
+
+    from caixaclaro.services import workers as workers_mod
+    from caixaclaro.services.faturamento import somar_faturamento_do_ano
+
+    ano = date.today().year
+    token, user_id, account_id = await _criar_conta(
+        client, monkeypatch, "worker-ano@x.com", "333.333.330-90",
+        "acc-worker-ano", "item-worker-ano",
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    r = await client.post(f"/api/v1/contas/{account_id}/sync", headers=headers)
+    assert r.status_code == 202, r.json()
+
+    paginas = {
+        None: {
+            "results": [
+                {"id": "tx-ano-1", "date": f"{ano - 1}-12-30",
+                 "description": "SERVICO PRESTADO CONSULTORIA DELTA", "amount": 700.00},
+            ],
+            "next": "p2",
+        },
+        "p2": {
+            "results": [
+                {"id": "tx-ano-2", "date": f"{ano}-01-02",
+                 "description": "SERVICO PRESTADO CONSULTORIA DELTA", "amount": 300.00},
+                {"id": "tx-ano-3", "date": f"{ano}-01-03",
+                 "description": "PAGAMENTO FORNECEDOR", "amount": -120.00},
+            ],
+            "next": None,
+        },
+    }
+
+    async def listar_transactions(account_id_provider, cursor=None):
+        return paginas[cursor]
+
+    monkeypatch.setattr(workers_mod.pluggy, "listar_transactions", listar_transactions)
+
+    async with conexao() as conn:
+        assert await workers_mod.processar_um_sync(conn, "worker-ano") is True
+        uid = uuid.UUID(user_id)
+        assert await somar_faturamento_do_ano(conn, uid, ano - 1) == Decimal("700.00")
+        assert await somar_faturamento_do_ano(conn, uid, ano) == Decimal("300.00")
+        meta = await conn.fetchval(
+            "SELECT meta->>'delta_faturamento' FROM audit_log "
+            "WHERE acao = 'SYNC_COMPLETED' AND user_id = $1", uid,
+        )
+    assert Decimal(meta) == Decimal("1000.00")
+
+    r = await client.get("/api/v1/transacoes/fiscal/resumo", headers=headers)
+    assert r.json()["ano_referencia"] == ano
+    assert Decimal(r.json()["faturamento_acumulado"]) == Decimal("300.00")

@@ -2,7 +2,7 @@ import base64
 import binascii
 import uuid as _uuid
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request
@@ -25,15 +25,30 @@ from ..domain.fiscal.classificacao import (
 from ..domain.fiscal.guardrails import aplicar_guardrail
 from ..domain.fiscal.triagem import triar
 from ..services.faturamento import (
+    acumular_por_ano,
     atualizar_fiscal_state,
+    atualizar_fiscal_state_por_ano,
     conta_faturamento,
 )
 from ..services.notificacoes import enviar_alertas_telegram
 from ..services.fiscal import processar_lancamento
 from ..services.tax_opinion import generate_tax_opinion
 from ..services.fiscal_resumo import resumo as resumo_fiscal
-from ..services.fila import confirmar as confirmar_tx, listar_fila
+from ..services.fila import (
+    aplicar_a_iguais,
+    carregar_regras,
+    confirmar as confirmar_tx,
+    lembrar_regra,
+    listar_fila,
+)
+from ..services.rotulos import brl, opcoes_para, rotulo
 from ..services.alertas import listar_alertas, marcar_lido
+from ..services.lotes import (
+    apagar_repetidos,
+    apagar_transacao,
+    desfazer_lote,
+    repetidos_do_lote,
+)
 
 from ..domain.fiscal.classificacao import ClassificacaoResultado
 from ..domain.fiscal.guardrails import GuardrailResultado
@@ -67,6 +82,9 @@ def _serializar_completa(r) -> dict:
     d = _serializar_resumo(r)
     d.update({
         "categoria": r["categoria"],
+        "proposito": r.get("proposito"),
+        "rotulo": rotulo(r["categoria"], r.get("proposito")),
+        "confirmada": r.get("confirmado_por") is not None,
         "needs_review": r["needs_review"],
         "criado_em": r["criado_em"].isoformat(),
         "atualizado_em": r["atualizado_em"].isoformat(),
@@ -88,9 +106,14 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
     paste_id = calcular_paste_id(texto)
     uid = _uuid.UUID(user_id)
     importados = 0
-    delta_faturamento = Decimal("0")
-    data_mais_recente: date | None = None
-    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
+    # Cada lançamento entra na soma do ano da própria data: um extrato pode
+    # atravessar a virada do ano.
+    deltas_por_ano: dict[int, Decimal] = {}
+    ctx = ContextoClassificacao(
+        personal_rules={},
+        regime=regime,
+        regras_pessoais=await carregar_regras(conn, _uuid.UUID(user_id)),
+    )
 
     for i, l in enumerate(lancamentos):
         rf = processar_lancamento(
@@ -122,16 +145,12 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
         )
         if inserted is not None:
             importados += 1
-            if conta_faturamento(c.patrimonio, cat):
-                delta_faturamento += Decimal(str(l.valor))
-                if data_mais_recente is None or l.data > data_mais_recente:
-                    data_mais_recente = l.data
+            if conta_faturamento(c.patrimonio, cat, l.valor):
+                acumular_por_ano(deltas_por_ano, l.data, l.valor)
 
-    if delta_faturamento > 0 and data_mais_recente is not None:
-        res = await atualizar_fiscal_state(
-            conn, uid, delta_faturamento, data_mais_recente
-        )
-        alertas_out.extend(res.alertas_criados)
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
 
     rows = await conn.fetch(
         """
@@ -153,9 +172,16 @@ async def _operacao_colar(conn, user_id: str, texto: str, alertas_out: list, reg
               "importados": importados},
     )
 
+    # Aviso, não decisão: quantos destes repetem lançamentos de outra origem
+    # (CONTRATOS_INTERNOS §3 proíbe usar data+descrição+valor como identidade).
+    repetidos = (
+        len(await repetidos_do_lote(conn, uid, paste_id)) if importados else 0
+    )
+
     return {
         "paste_id": paste_id,
         "importados": importados,
+        "possiveis_repetidos": repetidos,
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
 
@@ -208,9 +234,14 @@ async def _operacao_importar(
     import_id = str(_uuid.uuid4())
     uid = _uuid.UUID(user_id)
     importados = 0
-    delta_faturamento = Decimal("0")
-    data_mais_recente: date | None = None
-    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
+    # Cada lançamento entra na soma do ano da própria data: um extrato pode
+    # atravessar a virada do ano.
+    deltas_por_ano: dict[int, Decimal] = {}
+    ctx = ContextoClassificacao(
+        personal_rules={},
+        regime=regime,
+        regras_pessoais=await carregar_regras(conn, _uuid.UUID(user_id)),
+    )
 
     for i, l in enumerate(lancamentos):
         rf = processar_lancamento(
@@ -244,16 +275,12 @@ async def _operacao_importar(
         if inserted is not None:
             importados += 1
 
-            if conta_faturamento(c.patrimonio, cat):
-                delta_faturamento += Decimal(str(l.valor))
-                if data_mais_recente is None or l.data > data_mais_recente:
-                    data_mais_recente = l.data
+            if conta_faturamento(c.patrimonio, cat, l.valor):
+                acumular_por_ano(deltas_por_ano, l.data, l.valor)
 
-    if delta_faturamento > 0 and data_mais_recente is not None:
-        res = await atualizar_fiscal_state(
-            conn, uid, delta_faturamento, data_mais_recente
-        )
-        alertas_out.extend(res.alertas_criados)
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
 
     rows = await conn.fetch(
         """
@@ -275,9 +302,14 @@ async def _operacao_importar(
               "n": len(lancamentos), "importados": importados},
     )
 
+    repetidos = (
+        len(await repetidos_do_lote(conn, uid, import_id)) if importados else 0
+    )
+
     return {
         "import_id": import_id,
         "importados": importados,
+        "possiveis_repetidos": repetidos,
         "itens": [_serializar_resumo(r) for r in rows],
     }, 201
 
@@ -352,7 +384,8 @@ async def listar(
 
     sql = """
         SELECT id, data, descricao_bruta, valor, origem, line_index,
-               categoria, needs_review, criado_em, atualizado_em, versao
+               categoria, proposito, confirmado_por,
+               needs_review, criado_em, atualizado_em, versao
         FROM transactions
         WHERE user_id = $1
           AND ($2::date IS NULL OR data >= $2::date)
@@ -412,6 +445,7 @@ def _serializar_fila(r) -> dict:
         "criado_em": r["criado_em"].isoformat(),
         "atualizado_em": r["atualizado_em"].isoformat(),
         "versao": r["versao"],
+        "opcoes": list(opcoes_para(r["valor"])),
     }
 
 
@@ -445,6 +479,10 @@ async def fila(
 class ConfirmarIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     categoria: str | None = None
+    proposito: str | None = None
+    # true => guarda a resposta como regra pessoal e aplica a mesma resposta
+    # aos outros lancamentos pendentes com descricao e direcao iguais.
+    lembrar: bool = False
 
 
 @router.patch("/{tx_id}/confirmar")
@@ -459,7 +497,9 @@ async def confirmar_endpoint(
 
     async def op(conn):
         return await _operacao_confirmar(
-            conn, str(u["id"]), tx_id, dados.categoria, alertas_para_enviar
+            conn, str(u["id"]), tx_id, dados.categoria, alertas_para_enviar,
+            proposito=dados.proposito, lembrar=dados.lembrar,
+            regime=u["regime"],
         )
 
     resposta, status_http = await executar_com_idempotencia(
@@ -473,14 +513,51 @@ async def confirmar_endpoint(
     return JSONResponse(content=resposta, status_code=status_http)
 
 
-async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out):
+_NOME_DA_SOMA = {
+    "MEI": "do seu faturamento como MEI",
+    "SIMPLES": "das receitas do seu negócio",
+    "PF": "do que você recebeu por trabalho",
+}
+
+
+def _mensagem_confirmacao(resultado, iguais, regra_criada, regime, delta_total) -> str:
+    """Resposta em linguagem de gente para a decisão do usuário."""
+    soma = _NOME_DA_SOMA.get(regime, _NOME_DA_SOMA["MEI"])
+    nome = rotulo(resultado.categoria_nova, resultado.proposito_novo)
+    partes = [f"Anotado: {nome[0].lower()}{nome[1:]}."]
+    if delta_total > 0:
+        partes.append(f"Entrou na soma {soma} (+{brl(delta_total)}).")
+    elif delta_total < 0:
+        partes.append(f"Saiu da soma {soma} (−{brl(delta_total)}).")
+    else:
+        partes.append(f"Não muda a soma {soma}.")
+    if iguais:
+        n = len(iguais)
+        partes.append(
+            "A mesma resposta valeu para mais 1 lançamento igual."
+            if n == 1
+            else f"A mesma resposta valeu para mais {n} lançamentos iguais."
+        )
+    if regra_criada:
+        partes.append(
+            "Quando aparecer outro igual, o CaixaClaro já usa esta resposta."
+        )
+    return " ".join(partes)
+
+
+async def _operacao_confirmar(
+    conn, user_id, tx_id, categoria_nova, alertas_out,
+    *, proposito=None, lembrar=False, regime="MEI", corrigir=False,
+):
     try:
         tx_uuid = _uuid.UUID(tx_id)
     except ValueError:
         raise erro(400, "ID_INVALIDO", "ID da transação inválido")
 
+    uid = _uuid.UUID(user_id)
     resultado, motivo = await confirmar_tx(
-        conn, _uuid.UUID(user_id), tx_uuid, categoria_nova, user_id
+        conn, uid, tx_uuid, categoria_nova, user_id,
+        proposito_novo=proposito, permitir_correcao=corrigir,
     )
 
     if resultado is None:
@@ -498,29 +575,45 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out)
                 400, "CATEGORIA_INVALIDA",
                 f"Categoria desconhecida: {categoria_nova}",
             )
+        if motivo == "proposito_invalido":
+            raise erro(
+                400, "PROPOSITO_INVALIDO",
+                f"Propósito desconhecido: {proposito}",
+            )
         raise erro(500, "ERRO_INTERNO", "Motivo desconhecido")
 
-    # Retroatividade: se a categoria mudou e afeta §9, atualiza fiscal_state.
-    if resultado.delta_faturamento != 0:
-        data_tx = await conn.fetchval(
-            "SELECT data FROM transactions WHERE id = $1", tx_uuid
-        )
-        res = await atualizar_fiscal_state(
-            conn, _uuid.UUID(user_id), resultado.delta_faturamento, data_tx
-        )
-        alertas_out.extend(res.alertas_criados)
+    iguais = []
+    regra_criada = False
+    if lembrar:
+        iguais = await aplicar_a_iguais(conn, uid, resultado, user_id)
+        regra_criada = await lembrar_regra(conn, uid, resultado)
 
-    # Auditoria
+    # Retroatividade (M4_CONTRATO §9): cada decisão muda a soma do ano do
+    # próprio lançamento. A soma é relida do banco, um ano de cada vez.
+    deltas_por_ano: dict[int, Decimal] = {}
+    delta_total = Decimal("0")
+    for r in [resultado, *iguais]:
+        if r.delta_faturamento != 0:
+            acumular_por_ano(deltas_por_ano, r.data, r.delta_faturamento)
+            delta_total += r.delta_faturamento
+    alertas_out.extend(
+        await atualizar_fiscal_state_por_ano(conn, uid, deltas_por_ano)
+    )
+
     await registrar_auditoria(
         conn,
         ator="usuario",
-        acao="transacao_confirmada",
+        acao="transacao_corrigida" if corrigir else "transacao_confirmada",
         user_id=user_id,
         meta={
             "tx_id": tx_id,
             "categoria_antiga": resultado.categoria_antiga,
             "categoria_nova": resultado.categoria_nova,
+            "proposito": resultado.proposito_novo,
             "delta_faturamento": str(resultado.delta_faturamento),
+            "lembrar": lembrar,
+            "aplicadas_iguais": len(iguais),
+            "regra_criada": regra_criada,
         },
     )
 
@@ -528,9 +621,242 @@ async def _operacao_confirmar(conn, user_id, tx_id, categoria_nova, alertas_out)
         "tx_id": resultado.tx_id,
         "categoria_antiga": resultado.categoria_antiga,
         "categoria_nova": resultado.categoria_nova,
+        "proposito": resultado.proposito_novo,
+        "rotulo": rotulo(resultado.categoria_nova, resultado.proposito_novo),
         "delta_faturamento": str(resultado.delta_faturamento),
+        "delta_total": str(delta_total),
         "categoria_mudou": resultado.categoria_mudou,
+        "conta_no_faturamento": resultado.conta_no_faturamento,
+        "aplicadas_iguais": len(iguais),
+        "ids_aplicados": [r.tx_id for r in iguais],
+        "regra_criada": regra_criada,
+        "mensagem": _mensagem_confirmacao(
+            resultado, iguais, regra_criada, regime, delta_total
+        ),
     }, 200
+
+
+# ============================================================
+# PATCH /transacoes/{id}/corrigir — o usuário sempre pode corrigir
+# ============================================================
+
+class CorrigirIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    categoria: str
+    proposito: str | None = None
+    lembrar: bool = False
+
+
+@router.patch("/{tx_id}/corrigir")
+async def corrigir_endpoint(
+    tx_id: str,
+    dados: CorrigirIn,
+    request: Request,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    u: dict = Depends(usuario_ativo),
+):
+    """Corrige qualquer lançamento do usuário — inclusive um que a máquina
+    classificou em silêncio ou que ele mesmo confirmou errado. Sem isto, um
+    palpite errado ficava sem conserto (confirmar devolvia 409)."""
+    alertas_para_enviar: list = []
+
+    async def op(conn):
+        return await _operacao_confirmar(
+            conn, str(u["id"]), tx_id, dados.categoria, alertas_para_enviar,
+            proposito=dados.proposito, lembrar=dados.lembrar,
+            regime=u["regime"], corrigir=True,
+        )
+
+    resposta, status_http = await executar_com_idempotencia(
+        user_id=str(u["id"]),
+        rota=f"PATCH /api/v1/transacoes/{tx_id}/corrigir",
+        chave=idempotency_key,
+        body={"tx_id": tx_id, **dados.model_dump()},
+        operacao=op,
+    )
+    await enviar_alertas_telegram(u["id"], alertas_para_enviar)
+    return JSONResponse(content=resposta, status_code=status_http)
+
+
+# ============================================================
+# GET /transacoes/opcoes-resposta — vocabulário único (M8: "centralizar
+# taxonomia via endpoint" era follow-up registrado)
+# ============================================================
+
+@router.get("/opcoes-resposta")
+async def opcoes_resposta(u: dict = Depends(usuario_ativo)):
+    return {
+        "entrada": list(opcoes_para(Decimal("1"))),
+        "saida": list(opcoes_para(Decimal("-1"))),
+    }
+
+
+# ============================================================
+# POST /transacoes/manual — anotar um lançamento sem extrato
+# ============================================================
+
+class ManualIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    data: date
+    descricao: str = Field(min_length=1, max_length=200)
+    # String decimal com sinal: positivo = entrou, negativo = saiu.
+    valor: str = Field(min_length=1, max_length=20)
+    categoria: str | None = None
+    proposito: str | None = None
+
+
+@router.post("/manual", status_code=201)
+async def manual(
+    dados: ManualIn,
+    request: Request,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    u: dict = Depends(usuario_ativo),
+):
+    """Quem recebe em dinheiro, ou ainda não tem extrato organizado, também
+    precisa conseguir começar. A origem `manual` já existia no contrato
+    (CONTRATOS_INTERNOS §3) e no schema, mas não tinha rota."""
+    try:
+        valor = Decimal(dados.valor)
+    except InvalidOperation:
+        raise erro(422, "VALIDATION_ERROR", "Valor inválido.")
+    if not valor.is_finite() or valor == 0:
+        raise erro(422, "VALIDATION_ERROR", "Informe um valor diferente de zero.")
+    valor = valor.quantize(Decimal("0.01"))
+    if dados.data > date.today():
+        raise erro(422, "VALIDATION_ERROR", "A data não pode estar no futuro.")
+    descricao = dados.descricao.strip()
+    if not descricao:
+        raise erro(422, "VALIDATION_ERROR", "Descreva o lançamento.")
+
+    alertas_para_enviar: list = []
+
+    async def op(conn):
+        uid = _uuid.UUID(str(u["id"]))
+        ctx = ContextoClassificacao(
+            personal_rules={},
+            regime=u["regime"],
+            regras_pessoais=await carregar_regras(conn, uid),
+        )
+        rf = processar_lancamento(descricao, valor, contexto=ctx)
+        cat = rf.guardrail.categoria_corrigida
+        c = rf.classificacao
+        tx_id = await conn.fetchval(
+            """
+            INSERT INTO transactions
+              (user_id, origem, data, descricao_bruta, valor,
+               categoria, categoria_original,
+               proposito, patrimonio, tratamento_tributario,
+               confianca, needs_review, via, motivo)
+            VALUES ($1, 'manual', $2, $3, $4,
+                    $5, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING id
+            """,
+            uid, dados.data, descricao, valor,
+            cat, c.proposito, c.patrimonio, c.tratamento_tributario,
+            c.confianca, rf.triagem.needs_review, c.via, c.motivo,
+        )
+        delta = valor if conta_faturamento(c.patrimonio, cat, valor) else Decimal("0")
+
+        if dados.categoria is not None:
+            resultado, motivo = await confirmar_tx(
+                conn, uid, tx_id, dados.categoria, str(u["id"]),
+                proposito_novo=dados.proposito, permitir_correcao=True,
+            )
+            if resultado is None:
+                codigo = (
+                    "PROPOSITO_INVALIDO" if motivo == "proposito_invalido"
+                    else "CATEGORIA_INVALIDA"
+                )
+                raise erro(400, codigo, "Tipo de lançamento desconhecido.")
+            delta += resultado.delta_faturamento
+
+        if delta != 0:
+            res = await atualizar_fiscal_state(conn, uid, delta, dados.data)
+            alertas_para_enviar.extend(res.alertas_criados)
+
+        row = await conn.fetchrow(
+            """
+            SELECT id, data, descricao_bruta, valor, origem, line_index,
+                   categoria, proposito, confirmado_por,
+                   needs_review, criado_em, atualizado_em, versao
+              FROM transactions WHERE id = $1
+            """,
+            tx_id,
+        )
+        await registrar_auditoria(
+            conn,
+            ator="usuario",
+            acao="lancamento_manual",
+            user_id=str(u["id"]),
+            meta={"tx_id": str(tx_id), "informou_categoria": dados.categoria is not None},
+        )
+        return _serializar_completa(row), 201
+
+    resposta, status_http = await executar_com_idempotencia(
+        user_id=str(u["id"]),
+        rota="POST /api/v1/transacoes/manual",
+        chave=idempotency_key,
+        body=dados.model_dump(mode="json"),
+        operacao=op,
+    )
+    await enviar_alertas_telegram(u["id"], alertas_para_enviar)
+    return JSONResponse(content=resposta, status_code=status_http)
+
+
+# ============================================================
+# Apagar — DELETE /transacoes/{id}, /lotes/{lote_id}, /lotes/{lote_id}/repetidos
+# ============================================================
+# DELETE é idempotente por natureza (a segunda chamada devolve 404); por isso
+# estas rotas não exigem Idempotency-Key.
+
+@router.delete("/lotes/{lote_id}/repetidos")
+async def apagar_repetidos_endpoint(lote_id: str, u: dict = Depends(usuario_ativo)):
+    """Apaga só os lançamentos de uma colagem/arquivo que repetem outros já
+    existentes (mesma data, valor e descrição). Os de antes ficam."""
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado = await apagar_repetidos(
+                conn, _uuid.UUID(str(u["id"])), lote_id
+            )
+    if resultado is None:
+        raise erro(404, "LOTE_NAO_ENCONTRADO", "Importação não encontrada.")
+    return resultado
+
+
+@router.delete("/lotes/{lote_id}")
+async def desfazer_lote_endpoint(lote_id: str, u: dict = Depends(usuario_ativo)):
+    """Desfaz uma colagem ou um arquivo importado: apaga todos os
+    lançamentos que vieram dele."""
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado = await desfazer_lote(conn, _uuid.UUID(str(u["id"])), lote_id)
+    if resultado is None:
+        raise erro(404, "LOTE_NAO_ENCONTRADO", "Importação não encontrada.")
+    return resultado
+
+
+@router.delete("/{tx_id}")
+async def apagar_transacao_endpoint(tx_id: str, u: dict = Depends(usuario_ativo)):
+    try:
+        tx_uuid = _uuid.UUID(tx_id)
+    except ValueError:
+        raise erro(400, "ID_INVALIDO", "ID da transação inválido")
+    async with conexao() as conn:
+        async with conn.transaction():
+            resultado, motivo = await apagar_transacao(
+                conn, _uuid.UUID(str(u["id"])), tx_uuid
+            )
+    if motivo == "nao_encontrada":
+        raise erro(404, "TX_NAO_ENCONTRADA", "Transação não encontrada")
+    if motivo == "origem_bancaria":
+        raise erro(
+            409,
+            "ORIGEM_BANCARIA",
+            "Lançamento do banco conectado não pode ser apagado: ele voltaria "
+            "na próxima sincronização.",
+        )
+    return resultado
+
 
 # ============================================================
 # GET /transacoes/{tx_id}/opiniao — CONTRATOS_INTERNOS §6
@@ -540,6 +866,7 @@ def _serializar_opcao(o) -> dict:
     return {
         "label": o.label,
         "proposito": o.proposito,
+        "categoria": o.categoria,
         "descricao": o.descricao,
     }
 
@@ -561,7 +888,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
 
     row = await conn.fetchrow(
         """
-        SELECT t.descricao_bruta, t.valor, t.categoria, t.categoria_original,
+        SELECT t.data, t.descricao_bruta, t.valor, t.origem, t.categoria, t.categoria_original,
                t.proposito, t.patrimonio, t.tratamento_tributario,
                t.confianca, t.needs_review, t.via, t.confirmado_por,
                u.regime
@@ -593,9 +920,13 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         motivo=None,
     )
 
+    # A regra de proteção acionada na ingestão não é persistida; não se
+    # reconstrói um "guardrail aplicado" a partir de categoria diferente da
+    # original — isso é o usuário corrigindo, não uma regra da máquina.
     cat_orig = row["categoria_original"] or cat_atual
+    confirmada = row["confirmado_por"] is not None
     guard = GuardrailResultado(
-        aplicado=(cat_orig != cat_atual),
+        aplicado=False,
         categoria_original=cat_orig,
         categoria_corrigida=cat_atual,
         motivo="",
@@ -614,10 +945,17 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         guard=guard,
         tri=tri,
         regime=row["regime"] or "MEI",
+        confirmada=confirmada,
     )
 
     return {
         "tx_id": tx_id,
+        "data": row["data"].isoformat(),
+        "descricao": row["descricao_bruta"],
+        "valor": str(row["valor"]),
+        "origem": row["origem"],
+        "rotulo": rotulo(cat_atual, row["proposito"]),
+        "opcoes_correcao": list(opcoes_para(row["valor"])),
         "fato": opiniao.fato,
         "interpretacao": opiniao.interpretacao,
         "relacao_pf_pj": opiniao.relacao_pf_pj,
@@ -629,7 +967,7 @@ async def _operacao_opiniao(conn, user_id, tx_id):
         "opcoes_esclarecimento": [
             _serializar_opcao(o) for o in opiniao.opcoes_esclarecimento
         ],
-        "confirmada": row["confirmado_por"] is not None,
+        "confirmada": confirmada,
     }
 
 # ============================================================

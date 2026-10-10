@@ -43,7 +43,7 @@ async def usuario_ativo(u: dict = Depends(usuario)) -> dict:
         raise erro(
             402,
             "ACESSO_BLOQUEADO",
-            "Assinatura ou periodo de teste expirado.",
+            "Assinatura ou período de teste expirado.",
             extra={"estado": decisao.motivo},
         )
 

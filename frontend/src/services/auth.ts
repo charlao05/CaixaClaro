@@ -22,6 +22,7 @@ export function register(
   email: string,
   senha: string,
   cpf: string,
+  regime: Regime,
 ): Promise<RegisterResponse> {
   return api<RegisterResponse>('/auth/register', {
     method: 'POST',
@@ -29,6 +30,7 @@ export function register(
       email,
       senha,
       cpf,
+      regime,
     },
   })
 }

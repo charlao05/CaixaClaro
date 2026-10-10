@@ -71,7 +71,7 @@ async def test_colar_cruza_faixa_envia_telegram(client, monkeypatch):
     assert enviar.await_count == 1
     chat_arg, msg_arg = enviar.await_args.args
     assert chat_arg == 90001
-    assert "60%" in msg_arg and "teto anual" in msg_arg
+    assert "60%" in msg_arg and "limite anual" in msg_arg
 
 
 async def test_colar_sem_chat_nao_envia(client, monkeypatch):

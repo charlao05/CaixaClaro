@@ -19,9 +19,9 @@ type Props = {
 }
 
 const REGIMES: { id: Regime; label: string }[] = [
-  { id: 'MEI', label: 'MEI (Microempreendedor Individual)' },
-  { id: 'SIMPLES', label: 'Simples Nacional' },
-  { id: 'PF', label: 'Pessoa Física' },
+  { id: 'MEI', label: 'Sou MEI (microempreendedor individual)' },
+  { id: 'SIMPLES', label: 'Tenho empresa no Simples Nacional' },
+  { id: 'PF', label: 'Pessoa física (por conta própria, com emprego ou começando)' },
 ]
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME
@@ -59,6 +59,8 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
   const [perfil, setPerfil] = useState<DadosPerfil | null>(null)
   const [nome, setNome] = useState('')
   const [regime, setRegime] = useState<Regime>(sessao.user.regime)
+  const [mesAbertura, setMesAbertura] = useState('')
+  const [anoAbertura, setAnoAbertura] = useState('')
   const [erroCarregar, setErroCarregar] = useState<string | null>(null)
   const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -81,6 +83,8 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
         setPerfil(p)
         setNome(p.nome ?? '')
         setRegime(p.regime)
+        setMesAbertura(p.mes_abertura_mei ? String(p.mes_abertura_mei) : '')
+        setAnoAbertura(p.ano_abertura_mei ? String(p.ano_abertura_mei) : '')
       } catch (e) {
         if (!ativo) return
         setErroCarregar(msgErro(e))
@@ -117,7 +121,13 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
     setSalvando(true)
     try {
       const nomeFinal = nome.trim() === '' ? null : nome.trim()
-      await atualizarPerfil(sessao.token, { nome: nomeFinal, regime })
+      const mes = parseInt(mesAbertura, 10)
+      const ano = parseInt(anoAbertura, 10)
+      const abertura =
+        regime === 'MEI' && mes >= 1 && mes <= 12 && ano >= 2000 && ano <= 2100
+          ? { mes_abertura_mei: mes, ano_abertura_mei: ano }
+          : { mes_abertura_mei: null, ano_abertura_mei: null }
+      await atualizarPerfil(sessao.token, { nome: nomeFinal, regime, ...abertura })
       const atualizado = await getPerfil(sessao.token)
       setPerfil(atualizado)
       setNome(atualizado.nome ?? '')
@@ -241,7 +251,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
           </label>
 
           <label>
-            Regime
+            Como você trabalha
             <select
               value={regime}
               onChange={(e) => setRegime(e.target.value as Regime)}
@@ -254,6 +264,42 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
               ))}
             </select>
           </label>
+
+          {regime === 'MEI' && (
+            <>
+              <label>
+                Mês em que você abriu o MEI
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  inputMode="numeric"
+                  placeholder="Ex.: 3"
+                  value={mesAbertura}
+                  onChange={(e) => setMesAbertura(e.target.value)}
+                  disabled={salvando}
+                />
+              </label>
+              <label>
+                Ano em que você abriu o MEI
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  inputMode="numeric"
+                  placeholder="Ex.: 2026"
+                  value={anoAbertura}
+                  onChange={(e) => setAnoAbertura(e.target.value)}
+                  disabled={salvando}
+                />
+              </label>
+              <p className="assinatura-nota">
+                No ano em que o MEI é aberto, o limite de faturamento é
+                proporcional aos meses de atividade. Com esta data o
+                CaixaClaro mostra o limite certo para você.
+              </p>
+            </>
+          )}
 
           <label>
             Criado em
@@ -284,14 +330,13 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
         {perfil.telegram_chat_id !== null ? (
           <div className="telegram-vinculado">
             <p>
-              <strong>Conectado</strong> — você vai receber alertas de
-              faturamento e do boleto mensal do MEI (DAS) no Telegram.
+              <strong>Conectado</strong> — você recebe no Telegram os avisos do CaixaClaro. Hoje eles são sobre o limite anual do MEI.
             </p>
           </div>
         ) : (
           <div className="telegram-vincular">
             <p>
-              Receba alertas de faturamento e do boleto mensal do MEI (DAS) no Telegram.
+              Receba no Telegram os avisos do CaixaClaro (hoje, sobre o limite anual do MEI). O Telegram também é, por enquanto, o único caminho para recuperar a senha.
             </p>
 
             {erroTelegram && <p role="alert">{erroTelegram}</p>}
@@ -343,7 +388,7 @@ export default function Perfil({ sessao, onVoltar, onAtualizarUsuario }: Props) 
                   </p>
                 ) : (
                   <p className="telegram-prazo">
-                    Expira as {formatHora(tokenResp.expira_em)} (~
+                    Expira às {formatHora(tokenResp.expira_em)} (~
                     {minutosAte(tokenResp.expira_em, agora)} min)
                   </p>
                 )}

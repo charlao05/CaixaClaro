@@ -6,9 +6,20 @@ Escopo:
 
 Fora de escopo:
 - CLIs (eval/runner, migration_runner) mantem print() como saida de terminal.
+
+Segredos (revisao de 2026-10-09, achado R9): a biblioteca HTTP (httpx)
+registra cada requisicao em INFO com a URL completa. A URL do Telegram leva
+o token do bot (/bot<TOKEN>/sendMessage) e a busca de cliente no Asaas leva
+o CPF (?cpfCnpj=...). Com a raiz em INFO, as duas coisas iam para o log de
+producao. CONTRATOS_INTERNOS §2: "CPF claro nunca em log de aplicacao".
+Duas barreiras:
+  1. httpx/httpcore so registram de WARNING para cima;
+  2. toda linha formatada passa por `mascarar` (token de bot e CPF), o que
+     cobre tambem mensagens de excecao e campos extras.
 """
 import json
 import logging
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -19,6 +30,30 @@ _RESERVED = frozenset({
     "created", "msecs", "relativeCreated", "thread", "threadName",
     "processName", "process", "message", "asctime", "taskName",
 })
+
+
+# Bibliotecas que registram a URL inteira de cada requisicao em INFO.
+_REGISTRAM_URL = ("httpx", "httpcore")
+
+_MASCARAS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Token do bot do Telegram: /bot<id numerico>:<segredo>/...
+    (re.compile(r"bot\d{5,}:[A-Za-z0-9_-]{10,}"), "bot<token-ocultado>"),
+    # CPF/CNPJ em query string (busca de cliente no Asaas).
+    (re.compile(r"(cpfCnpj=)[0-9.\-/]+"), r"\1<ocultado>"),
+    # CPF formatado em qualquer texto.
+    (re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b"), "<cpf-ocultado>"),
+    # CPF sem pontuação (11 dígitos soltos) — por exemplo, numa mensagem de
+    # erro devolvida por um provedor. Pode ocultar outro número de 11
+    # dígitos (um celular com DDD); no log, isso é aceitável.
+    (re.compile(r"\b\d{11}\b"), "<11-digitos-ocultados>"),
+)
+
+
+def mascarar(texto: str) -> str:
+    """Oculta token de bot do Telegram e CPF num texto de log."""
+    for padrao, troca in _MASCARAS:
+        texto = padrao.sub(troca, texto)
+    return texto
 
 
 class JsonFormatter(logging.Formatter):
@@ -44,7 +79,7 @@ class JsonFormatter(logging.Formatter):
             base[k] = v
         if record.exc_info:
             base["exception"] = self.formatException(record.exc_info)
-        return json.dumps(base, ensure_ascii=False, default=str)
+        return mascarar(json.dumps(base, ensure_ascii=False, default=str))
 
 
 _configured = False
@@ -67,5 +102,8 @@ def setup_logging(level: int = logging.INFO) -> None:
         root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(level)
+
+    for nome in _REGISTRAM_URL:
+        logging.getLogger(nome).setLevel(max(level, logging.WARNING))
 
     _configured = True

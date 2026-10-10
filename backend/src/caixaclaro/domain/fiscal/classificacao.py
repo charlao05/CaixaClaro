@@ -69,12 +69,33 @@ ViaId = Literal["regra_personalizada", "heuristica", "guardrail", "usuario"]
 
 
 @dataclass(frozen=True)
+class RegraPessoal:
+    """Resposta que o usuário pediu para o CaixaClaro lembrar.
+
+    `direcao` é a direção do lançamento em que a resposta foi dada
+    ("entrada" ou "saida"). Uma resposta dada a uma saída não vale para uma
+    entrada com a mesma descrição, e vice-versa: há bancos cuja descrição é
+    idêntica nos dois sentidos ("PIX TRANSF FULANO"). `None` = vale para os
+    dois sentidos.
+    """
+    padrao: str
+    categoria: str
+    proposito: str | None = None
+    direcao: str | None = None
+
+
+@dataclass(frozen=True)
 class ContextoClassificacao:
+    # Contrato original (M4_CONTRATO §5): padrão -> categoria, sem direção.
     personal_rules: dict[str, str]
     cpf_titular_hash: str | None = None
     cpf_contraparte_hash: str | None = None
     tipo_conta: str | None = None
     regime: str = "MEI"
+    # Regras aprendidas com as respostas do usuário, já na ordem de
+    # avaliação (a primeira que casa vence). Avaliadas antes de
+    # `personal_rules`; as duas têm a mesma precedência sobre a heurística.
+    regras_pessoais: tuple[RegraPessoal, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -112,12 +133,41 @@ _PROP_OVERRIDES = {
 }
 
 
+PROPOSITOS_VALIDOS: tuple[str, ...] = (
+    "trabalho_servico", "venda_produto", "salario_aposentadoria",
+    "transferencia_propria", "retirada_proprietario", "emprestimo",
+    "devolucao_reembolso", "gasto_negocio", "gasto_pessoal", "imposto_taxa",
+    "outros_indeterminado", "aporte_capital", "dinheiro_terceiros",
+    "rendimento_aplicacao", "doacao_heranca",
+)
+
+
+def dimensoes_padrao(categoria: str, proposito: str | None = None):
+    """(proposito, origem, patrimonio, tratamento) de uma categoria.
+
+    Usado quando o USUÁRIO decide a categoria (CONTRATOS_INTERNOS §15):
+    as demais dimensões acompanham a decisão dele, em vez de ficarem
+    presas ao palpite original da máquina.
+    """
+    prop, orig, patr, trat = _DEFAULTS[categoria]
+    if proposito is not None:
+        prop = proposito
+        if proposito in _PROP_OVERRIDES:
+            orig, patr, trat = _PROP_OVERRIDES[proposito]
+    return prop, orig, patr, trat
+
+
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = s.lower()
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def normalizar_descricao(s: str) -> str:
+    """Forma canônica de uma descrição (sem acento, minúscula, espaços únicos)."""
+    return _norm(s)
 
 
 def _contem(norm: str, *termos: str) -> bool:
@@ -246,24 +296,110 @@ def _heuristica(norm, ctx):
     return None
 
 
+# Direção do dinheiro. O sinal do valor é FATO do extrato; uma palavra-chave
+# é só um palpite. Quando os dois se contradizem, o palpite perde e o
+# lançamento vai para a revisão ("quando não dá para saber, ele pergunta").
+#
+# O golden dataset v1 usa valores sem sinal (magnitudes), então valor
+# positivo NÃO prova entrada: só valor negativo e marcas textuais explícitas
+# são usados como evidência de direção.
+_SO_ENTRADA = ("receita_servico", "receita_venda", "salario")
+_MARCA_SAIDA = ("enviad",)
+_MARCA_ENTRADA = ("recebid", "deposito")
+
+MOTIVO_SEM_EVIDENCIA = "Só pela descrição do extrato não dá para saber o que foi."
+# O motivo pode aparecer na tela de revisão ("Por que o CaixaClaro está
+# perguntando?"); por isso não leva identificador interno de categoria.
+MOTIVO_REGRA_APRENDIDA = "Você já respondeu antes um lançamento com esta descrição."
+
+
+def _conflito_de_direcao(norm: str, valor, categoria: str) -> str | None:
+    if valor is None:
+        return None
+    if categoria in _SO_ENTRADA and (valor < 0 or _contem(norm, *_MARCA_SAIDA)):
+        return (
+            "A descrição lembra um recebimento, mas o dinheiro saiu da conta. "
+            "Por isso o CaixaClaro prefere perguntar."
+        )
+    if (
+        categoria == "custo_operacional"
+        and valor > 0
+        and _contem(norm, *_MARCA_ENTRADA)
+    ):
+        return (
+            "A descrição lembra um gasto, mas o dinheiro entrou na conta. "
+            "Por isso o CaixaClaro prefere perguntar."
+        )
+    return None
+
+
+def _respeitar_direcao(resultado, norm: str, valor):
+    conflito = _conflito_de_direcao(norm, valor, resultado.categoria)
+    if conflito is None:
+        return resultado
+    return _montar(
+        "outros", via="heuristica", confianca=0.5,
+        needs_review=True, motivo=conflito,
+    )
+
+
+def direcao_do_valor(valor) -> str | None:
+    """Direção do dinheiro pelo sinal do valor: FATO do extrato.
+
+    Zero é tratado como entrada, igual às opções de resposta da revisão.
+    """
+    if valor is None:
+        return None
+    return "saida" if valor < 0 else "entrada"
+
+
+def _regra_vale_para(regra: RegraPessoal, direcao: str | None) -> bool:
+    if regra.direcao is None:
+        return True
+    # Regra com direção só vale quando a direção do lançamento é conhecida
+    # e é a mesma. Na dúvida, não aplica: o lançamento segue para a
+    # heurística e, se for o caso, para a revisão.
+    return direcao is not None and regra.direcao == direcao
+
+
 def classificar_v2(descricao, valor, contexto):
     """Classificação determinística. Sem LLM, sem rede, sem estado."""
     norm = _norm(descricao)
 
+    direcao = direcao_do_valor(valor)
+    for regra in contexto.regras_pessoais:
+        if (
+            regra.categoria in _DEFAULTS
+            and _regra_vale_para(regra, direcao)
+            and _norm(regra.padrao) in norm
+        ):
+            return _respeitar_direcao(
+                _montar(
+                    regra.categoria, via="regra_personalizada",
+                    confianca=0.98, needs_review=False,
+                    motivo=MOTIVO_REGRA_APRENDIDA,
+                    proposito=regra.proposito,
+                ),
+                norm, valor,
+            )
+
     for pattern, cat in contexto.personal_rules.items():
         if cat in _DEFAULTS and _norm(pattern) in norm:
-            return _montar(
-                cat, via="regra_personalizada", confianca=0.98,
-                needs_review=False,
-                motivo=f"Regra personalizada: {pattern!r} -> {cat!r}",
+            return _respeitar_direcao(
+                _montar(
+                    cat, via="regra_personalizada", confianca=0.98,
+                    needs_review=False,
+                    motivo=f"Regra personalizada: {pattern!r} -> {cat!r}",
+                ),
+                norm, valor,
             )
 
     resultado = _heuristica(norm, contexto)
     if resultado is not None:
-        return resultado
+        return _respeitar_direcao(resultado, norm, valor)
 
     return _montar(
         "outros", via="heuristica", confianca=0.5,
         needs_review=True,
-        motivo="Entrada sem evidência suficiente; requer confirmação.",
+        motivo=MOTIVO_SEM_EVIDENCIA,
     )

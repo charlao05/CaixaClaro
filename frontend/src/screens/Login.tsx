@@ -4,6 +4,7 @@ import { salvarSessao, type Sessao } from '../services/session'
 import { ApiError } from '../services/api'
 
 type Props = {
+  aviso?: string | null
   onLogin: (s: Sessao) => void
   onIrParaRegister: () => void
   onIrParaEsqueciSenha: () => void
@@ -30,7 +31,7 @@ function IconeOlho({ aberto }: { aberto: boolean }) {
   )
 }
 
-export default function Login({ onLogin, onIrParaRegister, onIrParaEsqueciSenha }: Props) {
+export default function Login({ aviso = null, onLogin, onIrParaRegister, onIrParaEsqueciSenha }: Props) {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
@@ -69,6 +70,11 @@ export default function Login({ onLogin, onIrParaRegister, onIrParaEsqueciSenha 
     <main>
       <h1>CaixaClaro</h1>
       <form onSubmit={handleSubmit}>
+        {aviso && !erro && (
+          <p role="status" className="revisao-feedback">
+            {aviso}
+          </p>
+        )}
         <label>
           E-mail
           <input
