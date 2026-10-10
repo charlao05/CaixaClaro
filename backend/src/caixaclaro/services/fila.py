@@ -15,6 +15,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+import json
+
+from ..domain.fiscal.classificacao import (
+    PROPOSITOS_VALIDOS,
+    dimensoes_padrao,
+    normalizar_descricao,
+)
 from ..domain.fiscal.taxonomia import get_categoria
 from .faturamento import conta_faturamento
 
@@ -26,8 +33,8 @@ def _delta_faturamento(
     valor: Decimal,
 ) -> Decimal:
     """Delta retroativo. Zero quando a mudanca nao toca §9."""
-    antes = valor if conta_faturamento(patrimonio, categoria_antiga) else Decimal("0")
-    depois = valor if conta_faturamento(patrimonio, categoria_nova) else Decimal("0")
+    antes = valor if conta_faturamento(patrimonio, categoria_antiga, valor) else Decimal("0")
+    depois = valor if conta_faturamento(patrimonio, categoria_nova, valor) else Decimal("0")
     return Decimal(depois) - Decimal(antes)
 
 
@@ -90,8 +97,9 @@ async def buscar_para_confirmar(conn, user_id, tx_id):
     """Row pronta para confirmar ou None se nao encontrada / nao e do usuario."""
     return await conn.fetchrow(
         """
-        SELECT id, user_id, valor, patrimonio, categoria, categoria_original,
-               needs_review, confirmado_por
+        SELECT id, user_id, data, descricao_bruta, valor,
+               categoria, categoria_original, proposito, patrimonio,
+               tratamento_tributario, needs_review, confirmado_por
           FROM transactions
          WHERE id = $1 AND user_id = $2
          FOR UPDATE
@@ -108,6 +116,77 @@ class ConfirmacaoResultado:
     categoria_nova: str
     delta_faturamento: Decimal
     categoria_mudou: bool
+    proposito_novo: str | None = None
+    valor: Decimal = Decimal("0")
+    data: date | None = None
+    descricao: str = ""
+    conta_no_faturamento: bool = False
+
+
+async def _gravar_decisao(conn, row, cat_nova: str, proposito_novo: str | None,
+                          confirmado_por) -> ConfirmacaoResultado:
+    """Grava a decisao do usuario em uma transacao ja travada (FOR UPDATE).
+
+    CONTRATOS_INTERNOS §15: categoria e proposito sao do usuario. As demais
+    dimensoes (patrimonio, tratamento) ACOMPANHAM a decisao dele — antes
+    ficavam presas ao palpite original, e por isso uma entrada confirmada
+    como trabalho nunca entrava no faturamento (M4_CONTRATO §9 diz que
+    "outra categoria -> receita PJ: ADICIONA o valor").
+    """
+    cat_antiga = row["categoria"] or "outros"
+    patr_antigo = row["patrimonio"]
+    valor = row["valor"]
+
+    manter = (
+        cat_nova == cat_antiga
+        and proposito_novo is None
+        and row["proposito"] is not None
+        and patr_antigo is not None
+    )
+    if manter:
+        proposito = row["proposito"]
+        patrimonio = patr_antigo
+        tratamento = row["tratamento_tributario"]
+    else:
+        proposito, _origem, patrimonio, tratamento = dimensoes_padrao(
+            cat_nova, proposito_novo
+        )
+
+    antes = valor if conta_faturamento(patr_antigo, cat_antiga, valor) else Decimal("0")
+    conta = conta_faturamento(patrimonio, cat_nova, valor)
+    depois = valor if conta else Decimal("0")
+    delta = Decimal(depois) - Decimal(antes)
+
+    await conn.execute(
+        """
+        UPDATE transactions
+           SET categoria = $1,
+               proposito = $2,
+               patrimonio = $3,
+               tratamento_tributario = $4,
+               needs_review = false,
+               via = 'usuario',
+               confirmado_por = $5,
+               confirmado_em = now(),
+               versao = versao + 1,
+               atualizado_em = now()
+         WHERE id = $6
+        """,
+        cat_nova, proposito, patrimonio, tratamento, confirmado_por, row["id"],
+    )
+
+    return ConfirmacaoResultado(
+        tx_id=str(row["id"]),
+        categoria_antiga=cat_antiga,
+        categoria_nova=cat_nova,
+        delta_faturamento=delta,
+        categoria_mudou=(cat_antiga != cat_nova),
+        proposito_novo=proposito,
+        valor=valor,
+        data=row["data"],
+        descricao=row["descricao_bruta"],
+        conta_no_faturamento=conta,
+    )
 
 
 async def confirmar(
@@ -116,54 +195,136 @@ async def confirmar(
     tx_id,
     categoria_nova: str | None,
     confirmado_por: str,
+    proposito_novo: str | None = None,
+    permitir_correcao: bool = False,
 ):
-    """Confirma uma transacao da fila. Retorna ConfirmacaoResultado.
+    """Confirma (ou corrige) uma transacao. Retorna (ConfirmacaoResultado, None)
+    ou (None, motivo).
 
-    Erros de negocio sao levantados pelo caller (404/409). Aqui so
-    a logica de dados: valida estado, atualiza linha, calcula delta.
+    Sem `permitir_correcao`, vale o contrato M5A: so transacao da fila e
+    ainda nao confirmada. Com ele, o usuario pode corrigir qualquer
+    lancamento seu — inclusive um que a maquina classificou em silencio ou
+    que ele mesmo confirmou errado.
     """
     row = await buscar_para_confirmar(conn, user_id, tx_id)
     if row is None:
         return None, "nao_encontrada"
 
-    if row["confirmado_por"] is not None:
-        return None, "ja_confirmada"
+    if not permitir_correcao:
+        if row["confirmado_por"] is not None:
+            return None, "ja_confirmada"
+        if not row["needs_review"]:
+            return None, "nao_esta_em_revisao"
 
-    if not row["needs_review"]:
-        return None, "nao_esta_em_revisao"
-
-    cat_antiga = row["categoria"]
-    cat_nova = categoria_nova or cat_antiga
-
+    cat_nova = categoria_nova or row["categoria"] or "outros"
     try:
         get_categoria(cat_nova)
     except KeyError:
         return None, "categoria_invalida"
 
-    delta = _delta_faturamento(
-        cat_antiga, cat_nova, row["patrimonio"], row["valor"]
-    )
+    if proposito_novo is not None and proposito_novo not in PROPOSITOS_VALIDOS:
+        return None, "proposito_invalido"
 
-    await conn.execute(
+    resultado = await _gravar_decisao(
+        conn, row, cat_nova, proposito_novo, confirmado_por
+    )
+    return resultado, None
+
+
+# ============================================================
+# Aprender com a resposta do usuario
+# ============================================================
+
+TAMANHO_MINIMO_PADRAO = 8
+
+
+def _direcao(valor) -> str:
+    return "saida" if Decimal(str(valor)) < 0 else "entrada"
+
+
+async def aplicar_a_iguais(
+    conn, user_id, referencia: ConfirmacaoResultado, confirmado_por
+) -> list[ConfirmacaoResultado]:
+    """Aplica a mesma resposta aos outros lancamentos pendentes com a MESMA
+    descricao e a MESMA direcao. So roda quando o usuario pediu para lembrar.
+    """
+    alvo = normalizar_descricao(referencia.descricao)
+    direcao = _direcao(referencia.valor)
+    rows = await conn.fetch(
         """
-        UPDATE transactions
-           SET categoria = $1,
-               needs_review = false,
-               confirmado_por = $2,
-               confirmado_em = now(),
-               versao = versao + 1,
-               atualizado_em = now()
-         WHERE id = $3
+        SELECT id, user_id, data, descricao_bruta, valor,
+               categoria, categoria_original, proposito, patrimonio,
+               tratamento_tributario, needs_review, confirmado_por
+          FROM transactions
+         WHERE user_id = $1
+           AND needs_review = true
+           AND confirmado_por IS NULL
+           AND id <> $2
+         ORDER BY data, id
+         FOR UPDATE
         """,
-        cat_nova,
-        confirmado_por,
-        tx_id,
+        user_id,
+        _uuid.UUID(referencia.tx_id),
     )
+    aplicados: list[ConfirmacaoResultado] = []
+    for row in rows:
+        if normalizar_descricao(row["descricao_bruta"]) != alvo:
+            continue
+        if _direcao(row["valor"]) != direcao:
+            continue
+        aplicados.append(
+            await _gravar_decisao(
+                conn, row, referencia.categoria_nova,
+                referencia.proposito_novo, confirmado_por,
+            )
+        )
+    return aplicados
 
-    return ConfirmacaoResultado(
-        tx_id=str(tx_id),
-        categoria_antiga=cat_antiga,
-        categoria_nova=cat_nova,
-        delta_faturamento=delta,
-        categoria_mudou=(cat_antiga != cat_nova),
-    ), None
+
+async def lembrar_regra(conn, user_id, referencia: ConfirmacaoResultado) -> bool:
+    """Guarda a resposta como regra pessoal (M4_CONTRATO §5, precedencia 1).
+
+    Nao cria regra para descricao curta demais (casaria com quase tudo) nem
+    para `outros` (a triagem mandaria de volta para a fila de qualquer jeito).
+    """
+    padrao = normalizar_descricao(referencia.descricao)
+    if len(padrao) < TAMANHO_MINIMO_PADRAO:
+        return False
+    if referencia.categoria_nova == "outros":
+        return False
+    await conn.execute(
+        "DELETE FROM personal_rules WHERE user_id = $1 AND regra->>'padrao' = $2",
+        user_id, padrao,
+    )
+    await conn.execute(
+        "INSERT INTO personal_rules (user_id, regra) VALUES ($1, $2::jsonb)",
+        user_id,
+        json.dumps({
+            "padrao": padrao,
+            "categoria": referencia.categoria_nova,
+            "proposito": referencia.proposito_novo,
+            "direcao": _direcao(referencia.valor),
+        }),
+    )
+    return True
+
+
+async def carregar_regras(conn, user_id) -> tuple[dict[str, str], dict[str, str]]:
+    """Regras pessoais do usuario: (padrao -> categoria, padrao -> proposito).
+
+    Padroes mais longos primeiro, para o mais especifico vencer.
+    """
+    rows = await conn.fetch(
+        "SELECT regra FROM personal_rules WHERE user_id = $1 ORDER BY criado_em",
+        user_id,
+    )
+    regras: list[dict] = []
+    for r in rows:
+        bruto = r["regra"]
+        dado = json.loads(bruto) if isinstance(bruto, str) else dict(bruto)
+        if dado.get("padrao") and dado.get("categoria"):
+            regras.append(dado)
+    regras.sort(key=lambda d: len(d["padrao"]), reverse=True)
+    categorias = {d["padrao"]: d["categoria"] for d in regras}
+    propositos = {d["padrao"]: d["proposito"] for d in regras if d.get("proposito")}
+    return categorias, propositos

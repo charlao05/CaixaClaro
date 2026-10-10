@@ -2,16 +2,22 @@
 
 Deriva de M4_CONTRATO §9 (estado) e §10 (faixas).
 
-Retorna um payload pronto para o frontend: quanto ja foi faturado,
-quanto falta para a proxima faixa, quais alertas estao pendentes.
-Nao escreve nada — so leitura.
+Retorna um payload pronto para o frontend. Nao escreve nada — so leitura.
+
+2026-10-09: o resumo passou a respeitar o perfil do usuario. O limite anual
+so existe para MEI (e e proporcional no ano de abertura); para Simples e
+pessoa fisica `teto_anual`, `percentual_consumido` e `proxima_faixa` sao
+null e `faixas` vem vazia, em vez de exibir o teto do MEI por omissao
+(REGRA_ORIENTADOR §2.4). Tambem traz contagens e a soma de entradas e
+saidas do mes mais recente com lancamentos — soma simples sobre o que o
+usuario trouxe, sem classificacao.
 """
 import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from .faturamento import FAIXAS, TETO_MEI_ANUAL
+from .faturamento import FAIXAS, TETO_MEI_ANUAL, teto_do_ano
 
 
 def _load_estado(raw) -> dict:
@@ -32,10 +38,14 @@ class FaixaResumo:
     atingida: bool
 
 
-def _faixas_atingidas(faturamento: Decimal) -> list[FaixaResumo]:
+def _faixas_atingidas(
+    faturamento: Decimal, teto: Decimal | None = TETO_MEI_ANUAL
+) -> list[FaixaResumo]:
     resultado: list[FaixaResumo] = []
+    if teto is None:
+        return resultado
     for pct, slug, sev in FAIXAS:
-        limiar = TETO_MEI_ANUAL * pct
+        limiar = teto * pct
         resultado.append(FaixaResumo(
             slug=slug,
             percentual=float(pct),
@@ -73,33 +83,71 @@ async def resumo(conn, user_id) -> dict:
     fat_str = estado.get("faturamento_acumulado", "0")
     faturamento = Decimal(str(fat_str))
     ano_ref = estado.get("ano_referencia", date.today().year)
-    banda = estado.get("banda_atual")
     ultima = estado.get("ultima_avaliacao_em")
 
-    percentual = (
-        float(faturamento / TETO_MEI_ANUAL) if TETO_MEI_ANUAL > 0 else 0.0
+    perfil = await conn.fetchrow(
+        "SELECT regime, mes_abertura_mei, ano_abertura_mei "
+        "FROM users WHERE id = $1",
+        user_id,
+    )
+    regime = perfil["regime"] if perfil else "MEI"
+    teto = (
+        teto_do_ano(
+            regime,
+            perfil["mes_abertura_mei"],
+            perfil["ano_abertura_mei"],
+            ano_ref,
+        )
+        if perfil
+        else TETO_MEI_ANUAL
     )
 
-    faixas = _faixas_atingidas(faturamento)
+    percentual = (
+        round(float(faturamento / teto), 4) if teto is not None and teto > 0 else None
+    )
+    faixas = _faixas_atingidas(faturamento, teto)
     proxima = _proxima_faixa(faturamento, faixas)
+    banda = estado.get("banda_atual") if teto is not None else None
 
     alertas_nao_lidos = await conn.fetchval(
         "SELECT COUNT(*) FROM alerts WHERE user_id = $1 AND lido_em IS NULL",
         user_id,
     )
 
-    tem_transacoes = await conn.fetchval(
-        "SELECT EXISTS("
-        "SELECT 1 FROM transactions WHERE user_id = $1"
-        ")",
+    contagem = await conn.fetchrow(
+        "SELECT COUNT(*) AS total, "
+        "       COUNT(*) FILTER (WHERE needs_review IS TRUE) AS pendentes, "
+        "       MAX(data) AS ultima_data "
+        "  FROM transactions WHERE user_id = $1",
         user_id,
     )
+    total = int(contagem["total"])
+    pendentes = int(contagem["pendentes"])
+
+    mes_referencia = None
+    entradas_mes = None
+    saidas_mes = None
+    if contagem["ultima_data"] is not None:
+        ultima_data = contagem["ultima_data"]
+        inicio = ultima_data.replace(day=1)
+        somas = await conn.fetchrow(
+            "SELECT COALESCE(SUM(valor) FILTER (WHERE valor > 0), 0) AS entradas, "
+            "       COALESCE(SUM(valor) FILTER (WHERE valor < 0), 0) AS saidas "
+            "  FROM transactions "
+            " WHERE user_id = $1 AND data >= $2 AND data <= $3",
+            user_id, inicio, ultima_data,
+        )
+        mes_referencia = inicio.strftime("%Y-%m")
+        entradas_mes = str(somas["entradas"])
+        saidas_mes = str(abs(somas["saidas"]))
 
     return {
         "ano_referencia": ano_ref,
+        "regime": regime,
         "faturamento_acumulado": str(faturamento),
-        "teto_anual": str(TETO_MEI_ANUAL),
-        "percentual_consumido": round(percentual, 4),
+        "teto_anual": str(teto) if teto is not None else None,
+        "limite_proporcional": teto is not None and teto != TETO_MEI_ANUAL,
+        "percentual_consumido": percentual,
         "banda_atual": banda,
         "ultima_avaliacao_em": ultima,
         "faixas": [
@@ -114,5 +162,10 @@ async def resumo(conn, user_id) -> dict:
         ],
         "proxima_faixa": proxima,
         "alertas_nao_lidos": alertas_nao_lidos,
-        "tem_transacoes": tem_transacoes,
+        "tem_transacoes": total > 0,
+        "total_lancamentos": total,
+        "pendentes_revisao": pendentes,
+        "mes_referencia": mes_referencia,
+        "entradas_mes": entradas_mes,
+        "saidas_mes": saidas_mes,
     }

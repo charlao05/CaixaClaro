@@ -22,6 +22,49 @@ import json
 
 TETO_MEI_ANUAL = Decimal("81000.00")
 
+# No ano de abertura o limite do MEI é proporcional: R$ 6.750 por mês de
+# atividade, contando o mês de abertura (LC 123/2006, art. 18-A, §2º).
+LIMITE_MEI_POR_MES = Decimal("6750.00")
+
+
+def teto_do_ano(regime, mes_abertura, ano_abertura, ano_ref) -> Decimal | None:
+    """Limite anual aplicável ao usuário, ou None quando não há limite de MEI.
+
+    REGRA_ORIENTADOR §2.4: quem não é MEI não recebe o teto do MEI como
+    "default silencioso".
+    """
+    if regime != "MEI":
+        return None
+    if mes_abertura and ano_abertura and int(ano_abertura) == int(ano_ref):
+        meses_ativos = 12 - int(mes_abertura) + 1
+        return LIMITE_MEI_POR_MES * meses_ativos
+    return TETO_MEI_ANUAL
+
+
+def mensagem_faixa(pct: Decimal, teto: Decimal, ano: int | None = None) -> str:
+    """Texto do alerta, em linguagem simples e moeda brasileira."""
+    from .rotulos import brl
+
+    quando = f" de {ano}" if ano else ""
+    limite = brl(teto)
+    p = int(pct * 100)
+    if p < 100:
+        return (
+            f"Seu faturamento como MEI{quando} chegou a {p}% do limite "
+            f"anual ({limite})."
+        )
+    if p == 100:
+        return (
+            f"Seu faturamento como MEI{quando} passou do limite anual "
+            f"({limite}). Acima do limite, as regras do MEI mudam — leve "
+            f"estes números a um contador."
+        )
+    return (
+        f"Seu faturamento como MEI{quando} passou de {p}% do limite anual "
+        f"({limite}). Acima desse ponto as regras mudam de novo — leve "
+        f"estes números a um contador."
+    )
+
 # (percentual, slug, severidade)
 FAIXAS: tuple[tuple[Decimal, str, str], ...] = (
     (Decimal("0.60"), "enq_MEI_60",  "informativo"),
@@ -35,16 +78,18 @@ FAIXAS: tuple[tuple[Decimal, str, str], ...] = (
 TIPO_ALERTA = "faturamento_faixa"
 
 
-def _calcular_banda(faturamento: Decimal) -> str | None:
+def _calcular_banda(
+    faturamento: Decimal, teto: Decimal | None = TETO_MEI_ANUAL
+) -> str | None:
     """Retorna o slug da maior faixa atingida, ou None se abaixo de 60%.
 
     Independe de direcao: subir ou descer, a banda e sempre a do valor
     atual. Alertas §10 continuam monotonico-crescentes — so cruzar
     para cima emite; a descida apenas recalcula esta banda.
     """
-    if faturamento <= 0:
+    if faturamento <= 0 or teto is None or teto <= 0:
         return None
-    pct = faturamento / TETO_MEI_ANUAL
+    pct = faturamento / teto
     banda: str | None = None
     for p, slug, _ in FAIXAS:
         if pct >= p:
@@ -61,8 +106,16 @@ def _load_estado(raw) -> dict:
     return dict(raw)
 
 
-def conta_faturamento(patrimonio: str | None, categoria: str | None) -> bool:
-    """Regra §9: so incrementa em atividade_negocio + receita_servico|venda."""
+def conta_faturamento(
+    patrimonio: str | None, categoria: str | None, valor=None
+) -> bool:
+    """Regra §9: so incrementa em atividade_negocio + receita_servico|venda.
+
+    Quando `valor` e informado, saida (valor < 0) NUNCA conta: dinheiro que
+    saiu da conta nao e faturamento, qualquer que seja a palavra-chave.
+    """
+    if valor is not None and Decimal(str(valor)) < 0:
+        return False
     return (
         patrimonio == "atividade_negocio"
         and categoria in ("receita_servico", "receita_venda")
@@ -70,21 +123,22 @@ def conta_faturamento(patrimonio: str | None, categoria: str | None) -> bool:
 
 
 def faixa_cruzada(
-    antes: Decimal, depois: Decimal
+    antes: Decimal,
+    depois: Decimal,
+    teto: Decimal | None = TETO_MEI_ANUAL,
+    ano: int | None = None,
 ) -> list[tuple[str, str, str]]:
     """Faixas cujo limiar foi cruzado no intervalo (antes, depois].
 
     Retorna [(slug, severidade, mensagem)] na ordem crescente das faixas.
     """
     cruzadas: list[tuple[str, str, str]] = []
+    if teto is None:
+        return cruzadas
     for pct, slug, sev in FAIXAS:
-        limiar = TETO_MEI_ANUAL * pct
+        limiar = teto * pct
         if antes < limiar <= depois:
-            msg = (
-                f"Faturamento MEI cruzou {int(pct * 100)}% "
-                f"do teto anual (R$ {TETO_MEI_ANUAL})."
-            )
-            cruzadas.append((slug, sev, msg))
+            cruzadas.append((slug, sev, mensagem_faixa(pct, teto, ano)))
     return cruzadas
 
 
@@ -103,7 +157,10 @@ class FaturamentoResultado:
 
 
 def calcular_delta(
-    estado: dict, delta: Decimal, quando: date
+    estado: dict,
+    delta: Decimal,
+    quando: date,
+    teto: Decimal | None = TETO_MEI_ANUAL,
 ) -> tuple[dict, FaturamentoResultado]:
     """Retorna (novo_estado, resultado). Puro, sem I/O."""
     ano = quando.year
@@ -121,10 +178,10 @@ def calcular_delta(
     estado["faturamento_acumulado"] = str(depois)
     estado["ultima_avaliacao_em"] = datetime.now(timezone.utc).isoformat()
 
-    faixas = tuple(faixa_cruzada(antes, depois))
+    faixas = tuple(faixa_cruzada(antes, depois, teto, ano))
     # Recalcula banda_atual SEMPRE — descida tambem precisa refletir.
     # Alertas §10 seguem monotonico-crescentes (so faixa_cruzada emite).
-    estado["banda_atual"] = _calcular_banda(depois)
+    estado["banda_atual"] = _calcular_banda(depois, teto)
 
     return estado, FaturamentoResultado(
         antes=antes,
@@ -160,7 +217,25 @@ async def atualizar_fiscal_state(
     )
     estado_atual = _load_estado(row["estado"]) if row else {}
 
-    novo_estado, resultado = calcular_delta(estado_atual, delta, quando)
+    # O limite depende de quem e o usuario: so MEI tem teto, e no ano de
+    # abertura ele e proporcional. Quem nao e MEI nao recebe alerta de faixa.
+    perfil = await conn.fetchrow(
+        "SELECT regime, mes_abertura_mei, ano_abertura_mei "
+        "FROM users WHERE id = $1",
+        user_id,
+    )
+    teto = (
+        teto_do_ano(
+            perfil["regime"],
+            perfil["mes_abertura_mei"],
+            perfil["ano_abertura_mei"],
+            quando.year,
+        )
+        if perfil is not None
+        else TETO_MEI_ANUAL
+    )
+
+    novo_estado, resultado = calcular_delta(estado_atual, delta, quando, teto)
 
     await conn.execute(
         """

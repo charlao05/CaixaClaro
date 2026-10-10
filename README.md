@@ -25,6 +25,7 @@ Estados usados no projeto: IMPLEMENTADO, VERIFICADO, PASS, PRODUÇÃO.
 - **M10:** produção — implantado em VPS com domínio e Cloudflare Tunnel; segue parcial até backup agendado e monitor externo de `/readyz`.
 - **M11:** Meu Negócio — cadastro, edição e remoção de produto/serviço e precificação na interface; o backend também dispõe de movimentação manual de estoque. Fases 3–6 não iniciadas.
 - **M12:** recuperação de senha por Telegram — E2E real registrado em produção. Contas sem Telegram vinculado ainda não têm canal alternativo; e-mail é incremento futuro.
+- **M13:** jornada do público-alvo — confirmação que conta, perfis além do MEI, linguagem simples, aprender/corrigir/anotar. Testado localmente (575 testes); não implantado, telas não vistas em navegador. Ver `docs/AUDITORIA_JORNADA_2026-10-09.md`.
 
 ### Documentação operacional
 

@@ -23,6 +23,12 @@ function msgErro(e: unknown): string {
   return 'Erro inesperado.'
 }
 
+const ROTULO_SEVERIDADE: Record<string, string> = {
+  informativo: 'Aviso',
+  atencao: 'Atenção',
+  critico: 'Importante',
+}
+
 function classeSeveridade(sev: string): string {
   const s = sev.toLowerCase()
   if (s.includes('critic') || s.includes('alert') || s.includes('perigo')) {
@@ -140,7 +146,7 @@ export default function Alertas({ sessao, onVoltar }: Props) {
               <li key={a.id} className="alerta-card">
                 <div className="alerta-topo">
                   <span className={classeSeveridade(a.severidade)}>
-                    {a.severidade}
+                    {ROTULO_SEVERIDADE[a.severidade] ?? 'Aviso'}
                   </span>
                   <span className="alerta-data">
                     {formatData(a.criado_em)}

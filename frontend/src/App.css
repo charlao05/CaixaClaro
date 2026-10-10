@@ -1375,3 +1375,89 @@ main.dashboard .pagamentos-lista > li.pagamento-item:last-child {
   cursor: not-allowed;
   opacity: 0.4;
 }
+/* ---------- 2026-10-09: linguagem simples, perfis e painel ---------- */
+
+.cadastro-perfis {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.cadastro-perfis legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 700;
+}
+
+.cadastro-perfil {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--cc-line, #dfe7e3);
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cadastro-perfil input,
+.revisao-lembrar input {
+  width: auto;
+  min-height: 0;
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.cadastro-perfil span {
+  display: grid;
+  gap: 2px;
+}
+
+.cadastro-perfil small {
+  color: var(--cc-ink-soft, #5b6b66);
+  font-weight: 400;
+}
+
+.painel-numeros {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.painel-numeros div {
+  display: grid;
+  gap: 2px;
+}
+
+.painel-numeros strong {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.painel-numeros small {
+  color: var(--cc-ink-soft, #5b6b66);
+}
+
+.painel-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.revisao-lembrar {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .painel-numeros {
+    grid-template-columns: 1fr;
+  }
+}

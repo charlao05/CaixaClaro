@@ -438,3 +438,55 @@ Critérios:
 Limitação conhecida:
   - O canal inicial é Telegram. Conta sem `telegram_chat_id` não recebe o
     código. E-mail é um incremento posterior de produto, não parte do M12 v1.
+
+## M13 — Jornada do público-alvo
+
+Escopo: fazer o ciclo central funcionar para quem o produto diz atender —
+MEI, autônomo no CPF, assalariado com renda extra, pequeno negócio e quem
+está começando — e fazer a interface falar a língua dessa pessoa.
+Contexto, achados e decisões: docs/AUDITORIA_JORNADA_2026-10-09.md.
+
+Critérios:
+
+- [x] Entrada confirmada como trabalho ou venda entra na soma (M4 §9)
+      evidência: tests/test_jornada_publico_alvo.py::test_j1…;
+      tests/test_confirmacao.py::test_confirmar_promove_para_receita_incrementa_faturamento
+      (agora verifica o delta e o acumulado)
+- [x] O que o usuário lê não vaza vocabulário interno nem se contradiz
+      evidência: test_j2, test_j3, test_j18 (varre os sete textos de todos
+      os lançamentos de cinco perfis)
+- [x] Palpite não se apresenta como fato; direção do dinheiro é respeitada
+      evidência: test_j4 a test_j7
+- [x] Quem não é MEI não recebe teto nem alerta de MEI; limite proporcional
+      no ano de abertura
+      evidência: test_j8, test_j9, test_j17
+- [x] Mensagens em moeda brasileira; data sem ano nunca no futuro; erro de
+      arquivo sem estrutura interna
+      evidência: test_j10 a test_j12
+- [x] Ensinar uma vez vale para os iguais e para os próximos
+      evidência: test_j13
+- [x] Todo palpite tem conserto
+      evidência: test_j14, test_j15
+- [x] Dá para começar sem extrato
+      evidência: test_j16
+- [x] Jornada completa por perfil (5 perfis)
+      evidência: test_j18[…]
+- [x] Colagem em colunas, ponto decimal e CSV com data ISO são aceitos
+      evidência: test_j19
+- [x] Vocabulário de respostas vem do backend e respeita a taxonomia v1
+      evidência: test_j20
+- [x] Suíte completa verde e eval inalterado
+      EXECUTADO em 2026-10-09: 575 passed; eval PASS
+      (A=0, B=1.000, C=0.235, D=0). Frontend: build e lint sem erro.
+
+Ressalvas (natureza da evidência):
+
+- Extratos sintéticos; nenhum extrato real de banco foi usado.
+- Telas compilam e passam no lint, mas não foram vistas em navegador.
+- Nada foi exercitado em produção nem contra Pluggy/Asaas/Telegram reais.
+- Os textos do parecer são conteúdo fiscal voltado ao usuário e aguardam
+  leitura de um contador.
+
+Fora de escopo, declarado: ver seção 5 da auditoria (calendário de
+obrigações, recuperação por e-mail, páginas legais, exportar/excluir conta,
+medição de uso, navegação com histórico, preço, taxonomia v2).

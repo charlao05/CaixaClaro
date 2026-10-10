@@ -1,58 +1,20 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from '../services/api'
 import type { Sessao } from '../services/session'
-import { listarFila, confirmar, type ItemFila } from '../services/fila'
+import {
+  listarFila,
+  confirmar,
+  type ItemFila,
+  type OpcaoResposta,
+} from '../services/fila'
 
 type Props = {
   sessao: Sessao
   onVoltar: () => void
 }
 
-type OpcaoRapida = {
-  label: string
-  descricao: string
-  categoria: string
-}
-
-const OPCOES_RAPIDAS: OpcaoRapida[] = [
-  {
-    label: 'Foi pagamento por trabalho ou serviço',
-    descricao: 'Renda profissional — entra no faturamento',
-    categoria: 'receita_servico',
-  },
-  {
-    label: 'Foi venda de produto',
-    descricao: 'Comércio — entra no faturamento',
-    categoria: 'receita_venda',
-  },
-  {
-    label: 'Foi transferência entre minhas contas',
-    descricao: 'Mesma titularidade — isento',
-    categoria: 'transferencia_propria',
-  },
-  {
-    label: 'Foi empréstimo ou devolução',
-    descricao: 'Não é renda',
-    categoria: 'emprestimo',
-  },
-]
-
-const CATEGORIAS_COMPLETAS: { id: string; label: string }[] = [
-  { id: 'receita_servico', label: 'Trabalho / Prestação de Serviço' },
-  { id: 'receita_venda', label: 'Vendas de Produtos / Comércio' },
-  { id: 'salario', label: 'Salário Formal / Aposentadoria' },
-  { id: 'imposto_das', label: 'Impostos e tributos' },
-  { id: 'taxas_tarifas', label: 'Taxas Bancárias & Maquininha' },
-  { id: 'custo_operacional', label: 'Gastos da Atividade / Trabalho' },
-  { id: 'transferencia_propria', label: 'Transferência Entre Contas Próprias' },
-  { id: 'pessoal_prolabore', label: 'Retirada da Empresa / Pró-Labore (seu salário)' },
-  { id: 'reembolso', label: 'Devolução / Reembolso' },
-  { id: 'emprestimo', label: 'Empréstimo (peguei ou emprestei)' },
-  { id: 'outros', label: 'Aguardando Confirmação' },
-]
-
 function formatBRL(s: string): string {
-  const n = parseFloat(s)
+  const n = Math.abs(parseFloat(s))
   if (!isFinite(n)) return s
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -69,7 +31,18 @@ function msgErro(e: unknown): string {
       ? `${e.message} Tente novamente em ${e.retryAfter}s.`
       : e.message
   }
-  return 'Erro inesperado.'
+  return 'Algo deu errado. Tente de novo em instantes.'
+}
+
+function saiu(valor: string): boolean {
+  return parseFloat(valor) < 0
+}
+
+function mesmaPergunta(a: ItemFila, b: ItemFila): boolean {
+  return (
+    a.descricao_bruta.trim().toLowerCase() === b.descricao_bruta.trim().toLowerCase() &&
+    saiu(a.valor) === saiu(b.valor)
+  )
 }
 
 export default function Revisao({ sessao, onVoltar }: Props) {
@@ -78,7 +51,8 @@ export default function Revisao({ sessao, onVoltar }: Props) {
   const [processando, setProcessando] = useState(false)
   const [erroConfirmar, setErroConfirmar] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [categoriaManual, setCategoriaManual] = useState('')
+  const [lembrar, setLembrar] = useState(false)
+  const [respondidos, setRespondidos] = useState(0)
 
   useEffect(() => {
     let ativo = true
@@ -100,37 +74,37 @@ export default function Revisao({ sessao, onVoltar }: Props) {
 
   useEffect(() => {
     if (!feedback) return
-    const id = setTimeout(() => setFeedback(null), 2500)
+    const id = setTimeout(() => setFeedback(null), 7000)
     return () => clearTimeout(id)
   }, [feedback])
 
-  async function handleConfirmar(categoria: string) {
+  async function handleResponder(opcao: OpcaoResposta) {
     if (!itens || itens.length === 0) return
     const atual = itens[0]
     setProcessando(true)
     setErroConfirmar(null)
     try {
-      const r = await confirmar(sessao.token, atual.id, categoria)
-      setItens(itens.slice(1))
-      setCategoriaManual('')
-      const partes: string[] = []
-      if (r.categoria_mudou) {
-        partes.push(`Categoria: ${r.categoria_antiga} -> ${r.categoria_nova}`)
-      }
-      const delta = parseFloat(r.delta_faturamento)
-      if (delta > 0) {
-        partes.push(`Faturamento +${formatBRL(r.delta_faturamento)}`)
-      } else if (delta < 0) {
-        partes.push(`Faturamento ${formatBRL(r.delta_faturamento)}`)
-      } else {
-        partes.push('Sem impacto no faturamento')
-      }
-      setFeedback(partes.join(' • '))
+      const r = await confirmar(sessao.token, atual.id, {
+        categoria: opcao.categoria,
+        proposito: opcao.proposito,
+        lembrar,
+      })
+      const resolvidos = new Set<string>([atual.id, ...r.ids_aplicados])
+      setItens(itens.filter((i) => !resolvidos.has(i.id)))
+      setRespondidos((n) => n + resolvidos.size)
+      setFeedback(r.mensagem)
     } catch (e) {
       setErroConfirmar(msgErro(e))
     } finally {
       setProcessando(false)
     }
+  }
+
+  function handlePular() {
+    if (!itens || itens.length < 2) return
+    setErroConfirmar(null)
+    setFeedback('Sem problema. Este lançamento continua guardado, esperando.')
+    setItens([...itens.slice(1), itens[0]])
   }
 
   const cabecalho = (
@@ -168,8 +142,16 @@ export default function Revisao({ sessao, onVoltar }: Props) {
       <main className="dashboard">
         {cabecalho}
         <section>
-          <h2>Tudo verificado e seguro</h2>
-          <p>Nenhuma movimentação pendente de confirmação no momento.</p>
+          <h2>Tudo respondido</h2>
+          {feedback && (
+            <p role="status" className="revisao-feedback">
+              {feedback}
+            </p>
+          )}
+          <p>Nenhum lançamento esperando a sua resposta.</p>
+          <button type="button" onClick={onVoltar}>
+            Ver o painel
+          </button>
         </section>
       </main>
     )
@@ -177,6 +159,8 @@ export default function Revisao({ sessao, onVoltar }: Props) {
 
   const atual = itens[0]
   const total = itens.length
+  const iguais = itens.filter((i) => i.id !== atual.id && mesmaPergunta(i, atual)).length
+  const foiSaida = saiu(atual.valor)
 
   return (
     <main className="dashboard">
@@ -184,38 +168,47 @@ export default function Revisao({ sessao, onVoltar }: Props) {
 
       <section>
         <p className="revisao-progresso">
-          <strong>Pendencia 1 de {total}</strong>
+          <strong>
+            {total === 1 ? 'Falta 1 resposta' : `Faltam ${total} respostas`}
+          </strong>
+          {respondidos > 0 ? ` · ${respondidos} já resolvidos agora` : ''}
         </p>
+
+        {feedback && (
+          <p role="status" className="revisao-feedback">
+            {feedback}
+          </p>
+        )}
 
         <div className="revisao-card">
           <h2 className="revisao-valor">{formatBRL(atual.valor)}</h2>
-          <p className="revisao-descricao">{atual.descricao_bruta}</p>
-          <p className="revisao-data">{formatData(atual.data)}</p>
+          <p className="revisao-pergunta">
+            {foiSaida
+              ? `Saíram ${formatBRL(atual.valor)} da sua conta em ${formatData(atual.data)}.`
+              : `Entraram ${formatBRL(atual.valor)} na sua conta em ${formatData(atual.data)}.`}
+          </p>
+          <p className="revisao-descricao">
+            No extrato aparece assim: <strong>{atual.descricao_bruta}</strong>
+          </p>
 
           {atual.motivo && (
             <p className="revisao-motivo">
-              <strong>Por que o CaixaClaro perguntou?</strong> {atual.motivo}
-            </p>
-          )}
-
-          {feedback && (
-            <p role="status" className="revisao-feedback">
-              {feedback}
+              <strong>Por que o CaixaClaro está perguntando?</strong> {atual.motivo}
             </p>
           )}
 
           {erroConfirmar && <p role="alert">{erroConfirmar}</p>}
 
           <p className="revisao-pergunta">
-            <strong>O que foi este valor?</strong>
+            <strong>O que foi?</strong>
           </p>
 
           <div className="revisao-opcoes">
-            {OPCOES_RAPIDAS.map((o) => (
+            {atual.opcoes.map((o) => (
               <button
-                key={o.categoria}
+                key={o.id}
                 type="button"
-                onClick={() => handleConfirmar(o.categoria)}
+                onClick={() => handleResponder(o)}
                 disabled={processando}
               >
                 <span className="revisao-opcao-label">{o.label}</span>
@@ -225,29 +218,31 @@ export default function Revisao({ sessao, onVoltar }: Props) {
           </div>
 
           <div className="revisao-manual">
-            <label>
-              Outra categoria
-              <select
-                value={categoriaManual}
-                onChange={(e) => setCategoriaManual(e.target.value)}
+            <label className="revisao-lembrar">
+              <input
+                type="checkbox"
+                checked={lembrar}
+                onChange={(e) => setLembrar(e.target.checked)}
                 disabled={processando}
-              >
-                <option value="">Escolha...</option>
-                {CATEGORIAS_COMPLETAS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+              />
+              {iguais > 0
+                ? iguais === 1
+                  ? 'Usar a mesma resposta para o outro lançamento igual e para os próximos'
+                  : `Usar a mesma resposta para os outros ${iguais} lançamentos iguais e para os próximos`
+                : 'Lembrar desta resposta quando aparecer outro lançamento igual'}
             </label>
             <button
               type="button"
-              onClick={() => handleConfirmar(categoriaManual)}
-              disabled={processando || categoriaManual === ''}
+              onClick={handlePular}
+              disabled={processando || total < 2}
             >
-              Confirmar categoria
+              Não sei agora — pular
             </button>
           </div>
+          <p className="assinatura-nota">
+            Tudo bem não saber. Nada é contado como renda enquanto você não
+            disser o que foi.
+          </p>
         </div>
       </section>
     </main>

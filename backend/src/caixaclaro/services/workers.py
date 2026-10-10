@@ -25,6 +25,7 @@ from ..security.audit import registrar_auditoria
 from ..services.faturamento import atualizar_fiscal_state, conta_faturamento
 from ..services.notificacoes import enviar_alertas_telegram
 from . import pluggy
+from .fila import carregar_regras
 from .fiscal import processar_lancamento
 
 PROCESSANDO_OBSOLETO_SEGUNDOS = 300
@@ -114,7 +115,12 @@ async def _persistir_transacoes(conn, user_id, account_id, results, regime):
     inseridas = 0
     delta = Decimal("0")
     data_mais_recente = None
-    ctx = ContextoClassificacao(personal_rules={}, regime=regime)
+    regras, regras_proposito = await carregar_regras(conn, user_id)
+    ctx = ContextoClassificacao(
+        personal_rules=regras,
+        regime=regime,
+        personal_propositos=regras_proposito,
+    )
 
     for tx in results:
         tx_id = tx.get("id")
@@ -161,7 +167,7 @@ async def _persistir_transacoes(conn, user_id, account_id, results, regime):
         )
         if row is not None:
             inseridas += 1
-            if conta_faturamento(c.patrimonio, cat):
+            if conta_faturamento(c.patrimonio, cat, valor):
                 delta += valor
                 if data_mais_recente is None or data > data_mais_recente:
                     data_mais_recente = data

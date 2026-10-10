@@ -34,7 +34,7 @@ def test_aporte_capital():
     assert classif.patrimonio == "ponte_pf_pj"
     assert classif.tratamento_tributario == "isento_nao_tributavel"
     o = _opiniao(desc)
-    assert "aporte de capital" in o.fato.lower()
+    assert "colocado no negócio" in o.fato.lower()
     assert "capital social" in (
         o.interpretacao + o.possivel_tratamento_tributario
     ).lower()
@@ -47,8 +47,8 @@ def test_dinheiro_terceiros():
     assert classif.patrimonio == "transito_terceiro"
     assert classif.tratamento_tributario == "isento_nao_tributavel"
     o = _opiniao(desc)
-    assert "terceiro" in o.fato.lower()
-    assert "confirmado" in o.possivel_tratamento_tributario.lower()
+    assert "outra pessoa" in o.fato.lower()
+    assert "não é renda sua" in o.possivel_tratamento_tributario.lower()
 
 
 def test_rendimento_aplicacao():
@@ -68,5 +68,5 @@ def test_doacao_heranca():
     assert classif.proposito == "doacao_heranca"
     assert classif.patrimonio == "pessoa_fisica"
     o = _opiniao(desc)
-    assert "doacao" in o.fato.lower() or "transmissao" in o.fato.lower()
+    assert "doação" in o.fato.lower()
     assert "itcmd" in o.possivel_tratamento_tributario.lower()

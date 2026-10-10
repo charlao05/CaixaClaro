@@ -1,3 +1,4 @@
+from typing import Literal
 import asyncio
 from typing import Annotated
 
@@ -62,6 +63,9 @@ class RegistroIn(BaseModel):
     email: EmailStr
     senha: str = Field(min_length=8, max_length=72)
     cpf: str
+    # Perfil informado pela pessoa no cadastro. Omitido => "MEI", que e o
+    # comportamento historico da API (ver DECISOES 2026-10-09).
+    regime: Literal["MEI", "SIMPLES", "PF"] | None = None
 
 
 class LoginIn(BaseModel):
@@ -118,6 +122,7 @@ async def register(dados: RegistroIn, response: Response, request: Request):
         raise erro(400, "CPF_INVALIDO", "CPF inválido.")
 
     cpf_h = hash_cpf(cpf_digitos)
+    regime = dados.regime or "MEI"
 
     async with conexao() as conn:
         if await conn.fetchval(
@@ -135,11 +140,12 @@ async def register(dados: RegistroIn, response: Response, request: Request):
         user_id = await conn.fetchval(
             "INSERT INTO users "
             "(email, senha_hash, cpf_hash, cpf_cifrado, regime) "
-            "VALUES ($1,$2,$3,$4,'MEI') RETURNING id",
+            "VALUES ($1,$2,$3,$4,$5) RETURNING id",
             dados.email,
             hash_senha(dados.senha),
             cpf_h,
             cifrar_cpf(cpf_digitos),
+            regime,
         )
 
     sid, expira_em = await criar_sessao(str(user_id))
@@ -154,7 +160,7 @@ async def register(dados: RegistroIn, response: Response, request: Request):
             "id": str(user_id),
             "email": dados.email,
             "nome": None,
-            "regime": "MEI",
+            "regime": regime,
         },
     }
 

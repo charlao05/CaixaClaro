@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { OpcaoResposta } from './fila'
 
 export type GrauCerteza =
   | 'fato_confirmado'
@@ -13,6 +14,11 @@ export type OpcaoEsclarecimento = {
 
 export type Opiniao = {
   tx_id: string
+  data: string
+  descricao: string
+  valor: string
+  rotulo: string
+  opcoes_correcao: OpcaoResposta[]
   fato: string
   interpretacao: string
   relacao_pf_pj: string

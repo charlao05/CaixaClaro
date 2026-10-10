@@ -1,4 +1,5 @@
 import { api, type Paginado } from './api'
+import type { OpcaoResposta } from './fila'
 
 export type TransacaoResumo = {
   id: string
@@ -11,6 +12,10 @@ export type TransacaoResumo = {
 
 export type TransacaoCompleta = TransacaoResumo & {
   categoria: string | null
+  proposito: string | null
+  // Nome em linguagem simples, decidido pelo backend.
+  rotulo: string
+  confirmada: boolean
   needs_review: boolean
   criado_em: string
   atualizado_em: string
@@ -64,6 +69,38 @@ export function importar(
   return api<ImportarResponse>('/transacoes/importar', {
     method: 'POST',
     body: { formato, conteudo_base64: conteudoBase64 },
+    token,
+    idempotencyKey: idempotencyKey ?? novaChave(),
+  })
+}
+
+export type OpcoesResposta = {
+  entrada: OpcaoResposta[]
+  saida: OpcaoResposta[]
+}
+
+export function getOpcoesResposta(token: string): Promise<OpcoesResposta> {
+  return api<OpcoesResposta>('/transacoes/opcoes-resposta', { token })
+}
+
+export type AnotarEntrada = {
+  data: string
+  descricao: string
+  // string decimal com sinal: positivo = entrou, negativo = saiu
+  valor: string
+  categoria?: string
+  proposito?: string
+}
+
+// Anota um lancamento sem extrato (quem recebe em dinheiro tambem comeca).
+export function anotar(
+  token: string,
+  entrada: AnotarEntrada,
+  idempotencyKey?: string,
+): Promise<TransacaoCompleta> {
+  return api<TransacaoCompleta>('/transacoes/manual', {
+    method: 'POST',
+    body: entrada,
     token,
     idempotencyKey: idempotencyKey ?? novaChave(),
   })

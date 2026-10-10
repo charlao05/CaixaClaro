@@ -35,9 +35,25 @@ def test_opiniao_tem_todos_os_nove_campos():
         assert hasattr(o, campo), f"faltando: {campo}"
 
 
-def test_grau_fato_confirmado_para_confianca_alta():
+def test_palpite_de_confianca_alta_nao_e_fato_confirmado():
+    """2026-10-09 (D2): classificação automática ≠ confirmação
+    (M4_CONTRATO §16). Sem o usuário confirmar, o teto é leitura_provavel."""
     o = _gerar("PAGTO GUIA DAS SIMPLES")
+    assert o.grau_certeza_leitura == "leitura_provavel"
+
+
+def test_fato_confirmado_exige_confirmacao_do_usuario():
+    desc = "PAGTO GUIA DAS SIMPLES"
+    ctx = ContextoClassificacao(personal_rules={})
+    classif = classificar_v2(desc, Decimal("100.00"), ctx)
+    guard = aplicar_guardrail(classif, descricao=desc)
+    tri = triar(classif, guard)
+    o = generate_tax_opinion(
+        descricao=desc, valor=Decimal("100.00"),
+        classif=classif, guard=guard, tri=tri, confirmada=True,
+    )
     assert o.grau_certeza_leitura == "fato_confirmado"
+    assert "Você informou" in o.fato
 
 
 def test_grau_duvida_para_generico():
@@ -84,7 +100,7 @@ def test_salario_nao_compoe_faturamento():
 
 def test_emprestimo_tem_tratamento_sem_efeito():
     o = _gerar("CREDITO EMPRESTIMO CONSIGNADO BCO", "12000.00")
-    assert "imediato" in o.possivel_tratamento_tributario.lower()
+    assert "por si só, não é renda" in o.possivel_tratamento_tributario.lower()
 
 
 # ============================================================
@@ -217,7 +233,7 @@ async def test_opiniao_reflete_categoria_confirmada_pelo_usuario(client):
     assert r.status_code == 200, r.json()
     body = r.json()
     # A narrativa de fato cita "serviço prestado"
-    assert "serviço prestado" in body["fato"].lower()
+    assert "trabalho ou serviço" in body["fato"].lower()
     # Nao caiu em duvida (usuario confirmou, mas confianca/via
     # persistidos podem variar — apenas verifica que NAO e "outros")
     assert "sem classificacao clara" not in body["fato"].lower()
@@ -247,5 +263,5 @@ async def test_opiniao_pos_confirma_sem_idempotency(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert "serviço prestado" in body["fato"].lower()
+    assert "trabalho ou serviço" in body["fato"].lower()
 

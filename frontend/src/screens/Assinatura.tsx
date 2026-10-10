@@ -27,6 +27,23 @@ const PLANOS: { id: Plano; label: string; detalhe: string }[] = [
   { id: 'pro_anual', label: 'Plano anual', detalhe: 'R$ 299,00 a cada 365 dias' },
 ]
 
+const NOME_PLANO: Record<string, string> = {
+  pro_mensal: 'Plano mensal',
+  pro_anual: 'Plano anual',
+}
+
+const NOME_STATUS: Record<string, string> = {
+  ativa: 'Ativa',
+  pausada: 'Pausada',
+  cancelada: 'Cancelada',
+}
+
+function formatBRL(s: string): string {
+  const n = parseFloat(s)
+  if (!isFinite(n)) return s
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 function formatData(iso: string | null): string {
   if (!iso) return '-'
   const partes = iso.slice(0, 10).split('-')
@@ -256,10 +273,10 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
         ) : (
           <div className="assinatura-ativa">
             <p>
-              <strong>Plano:</strong> {sub.plano}
+              <strong>Plano:</strong> {NOME_PLANO[sub.plano] ?? sub.plano}
             </p>
             <p>
-              <strong>Status:</strong> {sub.status}
+              <strong>Situação:</strong> {NOME_STATUS[sub.status] ?? sub.status}
             </p>
             <p>
               <strong>Período:</strong> {formatData(sub.periodo_inicio)} até{' '}
@@ -348,7 +365,7 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
 
         {ultimo && (
           <p className="assinatura-ultimo">
-            Ultimo pagamento: {labelStatusPayment(ultimo.status)} —{' '}
+            Último pagamento: {labelStatusPayment(ultimo.status)} —{' '}
             {formatData(ultimo.criado_em)}
           </p>
         )}
@@ -359,8 +376,8 @@ export default function Assinatura({ sessao, onVoltar }: Props) {
           <ul className="pagamentos-lista">
             {payments.map((p) => (
               <li key={p.id} className="pagamento-item">
-                <span className="pagamento-plano">{p.plano}</span>
-                <span className="pagamento-valor">R$ {p.valor}</span>
+                <span className="pagamento-plano">{NOME_PLANO[p.plano] ?? p.plano}</span>
+                <span className="pagamento-valor">{formatBRL(p.valor)}</span>
                 <span className="pagamento-status">
                   {labelStatusPayment(p.status)}
                 </span>

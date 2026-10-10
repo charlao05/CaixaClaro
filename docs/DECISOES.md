@@ -283,3 +283,28 @@ distintas.
 
 Enquanto o Tunnel estiver em uso, HTTPS/TLS pertence à borda da Cloudflare;
 o Caddy local atende o tráfego HTTP interno do compose.
+
+## 2026-10-09 — Jornada do público-alvo (M13)
+
+Auditoria da experiência real de MEI, autônomo no CPF, assalariado com renda
+extra e pequeno negócio, registrada em docs/AUDITORIA_JORNADA_2026-10-09.md.
+Oito decisões (D1–D8) foram tomadas na implementação e estão descritas lá,
+com o motivo e o ponto do código onde reverter. As que mudam contrato:
+
+- CONTRATOS_INTERNOS §6: `fato_confirmado` passa a significar "confirmado
+  pelo usuário". Classificação automática, por mais confiante, é no máximo
+  `leitura_provavel` (M4_CONTRATO §16; REGRA_ORIENTADOR §1).
+- CONTRATOS_INTERNOS §6: cada opção de esclarecimento ganha `categoria`.
+- GET /transacoes/fiscal/resumo: `teto_anual` e `percentual_consumido`
+  podem ser `null` (quem não é MEI); campos novos de contagem e do mês.
+- PATCH /transacoes/{id}/confirmar aceita `proposito` e `lembrar`.
+- Rotas novas: PATCH /transacoes/{id}/corrigir, POST /transacoes/manual,
+  GET /transacoes/opcoes-resposta.
+- POST /auth/register aceita `regime`; omitido continua "MEI" (D7).
+- Código de erro novo: PROPOSITO_INVALIDO.
+
+Sem migration. Taxonomia v1 inalterada: "gasto pessoal", doação, rendimento
+e dinheiro de terceiros entram como propósitos (padrão de M8-D3).
+
+Pendente de decisão do responsável pelo produto: preço; taxonomia v2
+(`receita_cpf`); default de regime da API; calendário de obrigações.
