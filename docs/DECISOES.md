@@ -348,3 +348,29 @@ decisões DR1–DR11, um commit por correção). Mudanças de contrato:
 Pendente de decisão do responsável pelo produto: preço; cadência da
 renovação (hoje uma cobrança nova por dia enquanto a assinatura `ativa` não
 é paga); notificações do Asaas; demais itens da seção 8.3 da auditoria.
+
+## 2026-10-10 — Saúde responde a HEAD; Caddyfile sob teste
+
+Preparação do monitor externo de `/readyz` (último critério aberto de
+M10.C). Evidência e ensaios em docs/OPERACAO_PRODUCAO_2026-10-07.md,
+atualização de 2026-10-10.
+
+- `/healthz` e `/readyz` passam a responder a HEAD, com o mesmo código do
+  GET e sem corpo. Motivo: o FastAPI devolve 405 a HEAD numa rota que só
+  declara GET, e monitores de uptime (e o `curl -I`) sondam com HEAD — o
+  monitor acusaria queda com o site no ar. O HEAD não entra no esquema
+  público da API. `/health` (legado) não muda.
+- O `Caddyfile` passa a ter testes (backend/tests/test_caddyfile.py):
+  leitura do arquivo, sempre; Caddy de verdade, quando há um binário. O
+  workflow de testes do backend baixa o Caddy 2.11.7 com checksum fixo e
+  passa a rodar também quando só o `Caddyfile` muda. Motivo: a correção do
+  IP do cliente (DR7) e o monitor de `/readyz` dependem do Caddyfile, e
+  nada o verificava.
+- `{remote_host}` e `{http.request.remote.host}` são a mesma configuração:
+  o adaptador do Caddyfile troca a primeira pela segunda. O repositório
+  mantém a grafia curta; não há correção a versionar.
+
+Observação: a imagem de produção usa a tag flutuante `caddy:2-alpine`
+(frontend/Dockerfile). A versão do Caddy que roda no VPS é a que foi
+baixada na última construção da imagem `web`. O CI fixa uma versão para o
+teste; não fixa a de produção.
