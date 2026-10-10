@@ -9,7 +9,12 @@
     @backend path /api/* /health /healthz /readyz
 
     handle @backend {
-        reverse_proxy api:8000
+        reverse_proxy api:8000 {
+            # Endereco de quem abriu a conexao com o Caddy. A API usa isto
+            # para achar o IP real do cliente (backend: security/ip_cliente.py).
+            # header_up substitui qualquer valor que o cliente tenha mandado.
+            header_up X-CaixaClaro-Conexao {remote_host}
+        }
     }
 
     handle {

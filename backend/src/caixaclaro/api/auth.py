@@ -20,6 +20,7 @@ from ..security.auth import (
 from ..security.crypto import cifrar_cpf, hash_cpf
 from ..security.erros import erro
 from ..security.rate_limit import limitador_login, limitador_register
+from ..security.ip_cliente import ip_do_cliente
 from ..security.validacao import validar_cpf
 import logging
 import time
@@ -85,7 +86,9 @@ async def _aplicar_atraso(segundos: float) -> None:
 
 
 def _ip_do_request(request: Request) -> str:
-    return request.client.host if request.client else "desconhecido"
+    # Atrás do Caddy e do Cloudflare Tunnel, request.client.host é sempre o
+    # Caddy. Ver security/ip_cliente.py.
+    return ip_do_cliente(request)
 
 
 def _ua_do_request(request: Request) -> str:
