@@ -1,6 +1,16 @@
 :80 {
     encode gzip
 
+    # Cabecalhos de seguranca que nao mudam o funcionamento do app (revisao
+    # de 2026-10-09, item 28 do relatorio de estado). HSTS fica na borda da
+    # Cloudflare, que termina o HTTPS; CSP precisa ser testada com o widget
+    # da Pluggy antes de entrar.
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
     log {
         output stdout
         format json
