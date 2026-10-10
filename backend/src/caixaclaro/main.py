@@ -72,11 +72,18 @@ def criar_app() -> FastAPI:
     async def health():
         return {"ok": True, "ambiente": settings().ambiente}
 
+    # /healthz e /readyz respondem tambem a HEAD. O FastAPI devolve 405 a
+    # HEAD numa rota que so declara GET, e varios monitores de uptime (e o
+    # `curl -I`) sondam com HEAD: sem isto, o monitor externo de /readyz
+    # marcaria o site como fora do ar com tudo funcionando. O servidor nao
+    # envia corpo em resposta a HEAD; o codigo de status e o mesmo do GET.
+    @app.head("/healthz", include_in_schema=False)
     @app.get("/healthz")
     async def healthz():
         """Liveness: processo vivo, sem checar dependencias."""
         return {"ok": True}
 
+    @app.head("/readyz", include_in_schema=False)
     @app.get("/readyz")
     async def readyz():
         """Readiness: pool do PostgreSQL utilizavel."""
