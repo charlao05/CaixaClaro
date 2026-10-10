@@ -18,6 +18,7 @@ from ..db import conexao
 from ..security.erros import erro
 from ..security.idempotency import executar_com_idempotencia
 from ..services import billing
+from ..services.autorizacao import ContextoAutorizacao, fim_do_teste, situacao
 
 router = APIRouter()
 payments_router = APIRouter()
@@ -95,16 +96,32 @@ async def status(u: dict = Depends(usuario)):
     async with conexao() as conn:
         sub = await conn.fetchrow(
             "SELECT plano, status, periodo_inicio, periodo_fim, pausada_ate "
-            "  FROM subscriptions WHERE user_id = $1",
+            "  FROM subscriptions WHERE user_id = $1 "
+            " ORDER BY criado_em DESC, id DESC LIMIT 1",
             u["id"],
         )
         pag = await conn.fetchrow(
-            "SELECT id, status, pix_qr_code, criado_em "
+            "SELECT id, plano, metodo, status, pix_qr_code, criado_em "
             "  FROM payments WHERE user_id = $1 "
-            " ORDER BY criado_em DESC LIMIT 1",
+            " ORDER BY criado_em DESC, id DESC LIMIT 1",
             u["id"],
         )
+    # Mesma formula que libera ou bloqueia as rotas do produto (deps.py).
+    # A tela usa isto para dizer ao usuario POR QUE ele esta ali: o teste
+    # acabou, a assinatura venceu, ou esta tudo em dia.
+    sit = situacao(
+        ContextoAutorizacao(
+            trial_exempt=bool(u["trial_exempt"]),
+            criado_em=u["criado_em"],
+            periodo_fim=sub["periodo_fim"] if sub is not None else None,
+        )
+    )
     return {
+        "acesso": {
+            "liberado": sit in ("isento", "teste", "assinatura"),
+            "situacao": sit,
+            "teste_ate": fim_do_teste(u["criado_em"]).isoformat(),
+        },
         "subscription": None
         if sub is None
         else {
@@ -124,6 +141,8 @@ async def status(u: dict = Depends(usuario)):
         if pag is None
         else {
             "id": str(pag["id"]),
+            "plano": pag["plano"],
+            "metodo": pag["metodo"],
             "status": pag["status"],
             "tem_qr": pag["pix_qr_code"] is not None,
             "criado_em": pag["criado_em"].isoformat(),
@@ -136,7 +155,7 @@ async def listar_payments(u: dict = Depends(usuario)):
     async with conexao() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, plano, valor, periodo_dias, status,
+            SELECT id, plano, valor, periodo_dias, status, metodo,
                    asaas_payment_id, criado_em
               FROM payments
              WHERE user_id = $1
@@ -152,6 +171,7 @@ async def listar_payments(u: dict = Depends(usuario)):
                 "valor": str(r["valor"]),
                 "periodo_dias": r["periodo_dias"],
                 "status": r["status"],
+                "metodo": r["metodo"],
                 "asaas_payment_id": r["asaas_payment_id"],
                 "criado_em": r["criado_em"].isoformat(),
             }

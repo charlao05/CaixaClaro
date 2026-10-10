@@ -241,7 +241,11 @@ export default function App() {
 
   if (viewAuth === 'assinatura') {
     return (
-      <Assinatura sessao={sessao} onVoltar={() => setViewAuth('dashboard')} />
+      <Assinatura
+        sessao={sessao}
+        onVoltar={() => setViewAuth('dashboard')}
+        onLogout={handleLogout}
+      />
     )
   }
 

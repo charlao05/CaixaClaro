@@ -751,3 +751,258 @@ def test_success_url_para_asaas_url_publica(monkeypatch):
         assert _success_url_para_asaas() == "https://app.caixaclaro.com.br"
     finally:
         settings.cache_clear()
+
+
+# ----------------------------------------------------------------
+# Revisão de 2026-10-09 (achado R7): voltar no dia seguinte para pagar
+# ----------------------------------------------------------------
+
+def _asaas_com_ids_distintos(monkeypatch):
+    """Como _mock_asaas, mas cada cobrança criada recebe um id próprio."""
+    chamadas = _mock_asaas(monkeypatch)
+    criados: list[str] = []
+
+    async def criar_pix(customer_id, valor, external_reference, descricao, due_date):
+        asaas_id = f"pay_pix_{len(criados) + 1}"
+        criados.append(asaas_id)
+        return {"id": asaas_id, "externalReference": external_reference}
+
+    monkeypatch.setattr(asaas_mod, "criar_pagamento_pix", criar_pix)
+    chamadas["pix_criados"] = criados
+    return chamadas
+
+
+async def _vencer_prazo_local(uid):
+    """Passam mais de 24 h: o pendente sai do prazo local de reuso."""
+    async with conexao() as conn:
+        await conn.execute(
+            "UPDATE payments SET expira_em = now() - interval '1 hour' "
+            " WHERE user_id = $1 AND status = 'pendente'",
+            uid,
+        )
+
+
+async def _payments(uid):
+    async with conexao() as conn:
+        rows = await conn.fetch(
+            "SELECT id, status, metodo, asaas_payment_id FROM payments "
+            " WHERE user_id = $1 ORDER BY criado_em, asaas_payment_id",
+            uid,
+        )
+    return [dict(r) for r in rows]
+
+
+async def test_checkout_no_dia_seguinte_gera_cobranca_nova(client, monkeypatch):
+    uid = await _criar_usuario(client, "r7a@x.com", "111.444.777-35")
+    chamadas = _asaas_com_ids_distintos(monkeypatch)
+
+    async with conexao() as conn:
+        primeiro = await _checkout(conn, uid)
+    await _vencer_prazo_local(uid)
+    async with conexao() as conn:
+        segundo = await _checkout(conn, uid, worker="w2")
+
+    assert segundo["status"] == "pendente"
+    assert segundo["payment_id"] != primeiro["payment_id"]
+    assert segundo["pix_copy_paste"] == "000201..."
+    assert chamadas["pix_criados"] == ["pay_pix_1", "pay_pix_2"]
+
+    linhas = await _payments(uid)
+    assert [(l["status"], l["asaas_payment_id"]) for l in linhas] == [
+        ("expirado", "pay_pix_1"),
+        ("pendente", "pay_pix_2"),
+    ]
+    async with conexao() as conn:
+        auditado = await conn.fetchval(
+            "SELECT alvo FROM audit_log WHERE acao = 'PAGAMENTO_PENDENTE_EXPIRADO'"
+        )
+    assert auditado == primeiro["payment_id"]
+
+
+async def test_checkout_no_dia_seguinte_com_cartao(client, monkeypatch):
+    uid = await _criar_usuario(client, "r7b@x.com", "222.222.220-60")
+    _asaas_com_ids_distintos(monkeypatch)
+
+    async with conexao() as conn:
+        await _checkout(conn, uid)
+    await _vencer_prazo_local(uid)
+    async with conexao() as conn:
+        out = await _checkout(conn, uid, worker="w2", metodo="cartao")
+
+    assert out["metodo"] == "cartao"
+    assert out["invoice_url"] == "https://www.asaas.com/i/pay_card_novo"
+    linhas = await _payments(uid)
+    assert sorted((l["status"], l["metodo"]) for l in linhas) == [
+        ("expirado", "pix"),
+        ("pendente", "cartao"),
+    ]
+
+
+async def test_cobranca_antiga_paga_depois_ainda_concede_o_periodo(
+    client, monkeypatch
+):
+    uid = await _criar_usuario(client, "r7c@x.com", "333.333.330-90")
+    _asaas_com_ids_distintos(monkeypatch)
+
+    async with conexao() as conn:
+        primeiro = await _checkout(conn, uid)
+    await _vencer_prazo_local(uid)
+    async with conexao() as conn:
+        await _checkout(conn, uid, worker="w2")
+
+    # O usuário paga o PRIMEIRO PIX, que no Asaas continua valendo.
+    async with conexao() as conn:
+        async with conn.transaction():
+            res = await billing.processar_webhook_asaas(
+                conn,
+                {
+                    "event": "PAYMENT_CONFIRMED",
+                    "payment": {
+                        "id": "pay_pix_1",
+                        "externalReference": primeiro["payment_id"],
+                    },
+                },
+            )
+    assert res["status"] == "confirmado"
+    assert res["politica_b"] is True
+
+    async with conexao() as conn:
+        fim = await conn.fetchval(
+            "SELECT periodo_fim > now() FROM subscriptions WHERE user_id = $1", uid
+        )
+    assert fim is True
+
+
+async def test_http_checkout_no_dia_seguinte_nao_devolve_500(client, monkeypatch):
+    uid = await _criar_usuario(client, "r7d@x.com", "313.313.313-66")
+    _asaas_com_ids_distintos(monkeypatch)
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": "r7d@x.com", "senha": "senha123"}
+    )
+    token = r.json()["token"]
+
+    async def checkout_http(metodo):
+        return await client.post(
+            "/api/v1/billing/checkout",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": str(uuid.uuid4()),
+            },
+            json={"plano": "pro_mensal", "metodo": metodo},
+        )
+
+    r1 = await checkout_http("pix")
+    assert r1.status_code == 202, r1.text
+    await _vencer_prazo_local(uid)
+
+    r2 = await checkout_http("pix")
+    assert r2.status_code == 202, r2.text
+    assert r2.json()["payment_id"] != r1.json()["payment_id"]
+
+    # No mesmo dia, clicar de novo devolve a MESMA cobrança nova.
+    r3 = await checkout_http("pix")
+    assert r3.status_code == 202, r3.text
+    assert r3.json()["payment_id"] == r2.json()["payment_id"]
+
+
+# ----------------------------------------------------------------
+# GET /billing/status diz de onde vem o acesso (achado R8)
+# ----------------------------------------------------------------
+
+async def _status_http(client, email):
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": email, "senha": "senha123"}
+    )
+    token = r.json()["token"]
+    r = await client.get(
+        "/api/v1/billing/status", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def test_status_informa_a_situacao_do_acesso(client):
+    from datetime import datetime, timedelta, timezone
+
+    uid = await _criar_usuario(client, "r8@x.com", "314.314.314-27")
+
+    corpo = await _status_http(client, "r8@x.com")
+    assert corpo["acesso"]["liberado"] is True
+    assert corpo["acesso"]["situacao"] == "teste"
+    teste_ate = datetime.fromisoformat(corpo["acesso"]["teste_ate"])
+    falta = teste_ate - datetime.now(timezone.utc)
+    assert timedelta(days=6, hours=23) < falta <= timedelta(days=7)
+
+    async with conexao() as conn:
+        await conn.execute(
+            "UPDATE users SET criado_em = now() - interval '40 days' WHERE id = $1",
+            uid,
+        )
+    corpo = await _status_http(client, "r8@x.com")
+    assert corpo["acesso"] == {
+        "liberado": False,
+        "situacao": "trial_expirado",
+        "teste_ate": corpo["acesso"]["teste_ate"],
+    }
+    assert corpo["subscription"] is None
+
+    async with conexao() as conn:
+        await conn.execute(
+            "INSERT INTO subscriptions (user_id, plano, status, periodo_inicio, periodo_fim) "
+            "VALUES ($1, 'pro_mensal', 'ativa', now() - interval '31 days', "
+            "        now() - interval '1 day')",
+            uid,
+        )
+    corpo = await _status_http(client, "r8@x.com")
+    assert corpo["acesso"]["liberado"] is False
+    assert corpo["acesso"]["situacao"] == "assinatura_expirada"
+    # 'ativa' é o rótulo de "habilitada para renovação" (DECISOES 2026-09-26),
+    # não de período vigente: quem decide o acesso é `acesso`.
+    assert corpo["subscription"]["status"] == "ativa"
+
+    async with conexao() as conn:
+        await conn.execute(
+            "UPDATE subscriptions SET periodo_fim = now() + interval '10 days' "
+            " WHERE user_id = $1",
+            uid,
+        )
+    corpo = await _status_http(client, "r8@x.com")
+    assert corpo["acesso"]["liberado"] is True
+    assert corpo["acesso"]["situacao"] == "assinatura"
+
+    async with conexao() as conn:
+        await conn.execute(
+            "UPDATE users SET trial_exempt = TRUE WHERE id = $1", uid
+        )
+    corpo = await _status_http(client, "r8@x.com")
+    assert corpo["acesso"]["situacao"] == "isento"
+    assert corpo["acesso"]["liberado"] is True
+
+
+async def test_status_e_lista_informam_plano_e_forma_do_pagamento(client, monkeypatch):
+    """A tela precisa saber qual cobrança está esperando para reabri-la com a
+    mesma forma de pagamento (achado R8)."""
+    await _criar_usuario(client, "r8b@x.com", "315.315.315-98")
+    _asaas_com_ids_distintos(monkeypatch)
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": "r8b@x.com", "senha": "senha123"}
+    )
+    token = r.json()["token"]
+    h = {"Authorization": f"Bearer {token}"}
+
+    r = await client.post(
+        "/api/v1/billing/checkout",
+        headers={**h, "Idempotency-Key": str(uuid.uuid4())},
+        json={"plano": "pro_anual", "metodo": "cartao"},
+    )
+    assert r.status_code == 202, r.text
+
+    status = (await client.get("/api/v1/billing/status", headers=h)).json()
+    assert status["ultimo_payment"]["plano"] == "pro_anual"
+    assert status["ultimo_payment"]["metodo"] == "cartao"
+    assert status["ultimo_payment"]["status"] == "pendente"
+
+    itens = (await client.get("/api/v1/payments", headers=h)).json()["itens"]
+    assert [(i["plano"], i["metodo"], i["status"]) for i in itens] == [
+        ("pro_anual", "cartao", "pendente")
+    ]

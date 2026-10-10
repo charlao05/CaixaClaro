@@ -1112,6 +1112,15 @@ main.dashboard .contas-lista > li.conta-item {
   margin: 4px 0 12px;
 }
 
+.assinatura-aviso {
+  background: #ffffff;
+  border: 1px solid var(--cc-amber-line);
+  padding: 12px 14px;
+  border-radius: var(--cc-radius-sm);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
 .assinatura-planos {
   display: flex;
   gap: 12px;

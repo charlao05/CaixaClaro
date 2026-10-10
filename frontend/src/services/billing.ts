@@ -10,6 +10,24 @@ export type StatusPayment =
   | 'expirado'
   | 'falhou'
   | 'pendente_reconciliacao'
+  | 'cancelado'
+
+/**
+ * De onde vem o acesso ao produto — ou por que ele acabou. É a mesma regra
+ * que o backend usa para liberar ou bloquear as rotas (402 ACESSO_BLOQUEADO).
+ */
+export type SituacaoAcesso =
+  | 'isento'
+  | 'teste'
+  | 'assinatura'
+  | 'trial_expirado'
+  | 'assinatura_expirada'
+
+export type Acesso = {
+  liberado: boolean
+  situacao: SituacaoAcesso
+  teste_ate: string
+}
 
 export type Subscription = {
   plano: string
@@ -19,19 +37,22 @@ export type Subscription = {
   pausada_ate: string | null
 }
 
+export type MetodoPagamento = 'pix' | 'cartao'
+
 export type UltimoPayment = {
   id: string
+  plano: string
+  metodo: MetodoPagamento
   status: StatusPayment
   tem_qr: boolean
   criado_em: string
 }
 
 export type BillingStatusResponse = {
+  acesso: Acesso
   subscription: Subscription | null
   ultimo_payment: UltimoPayment | null
 }
-
-export type MetodoPagamento = 'pix' | 'cartao'
 
 export type CheckoutResponse = {
   payment_id: string
@@ -48,6 +69,7 @@ export type PaymentItem = {
   valor: string
   periodo_dias: number
   status: StatusPayment
+  metodo: MetodoPagamento
   asaas_payment_id: string | null
   criado_em: string
 }
